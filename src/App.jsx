@@ -130,18 +130,21 @@ export default function App(){
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
   const[skuCounters,setSkuCounters]=useState([]);
+  const[messages,setMessages]=useState([]);
+  const[dashMsg,setDashMsg]=useState(null);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
         supabase.from('sku_counters').select('*').order('id'),
+        supabase.from('messages').select('*').order('id'),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -166,6 +169,7 @@ export default function App(){
       setSkuCounters(skuData);
       skuData.filter(c=>c.value===1500&&(skuRes.data??[]).find(o=>o.id===c.id)?.value===0)
         .forEach(c=>supabase.from('sku_counters').update({value:1500}).eq('id',c.id));
+      if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       setLoading(false);
     }
     load();
@@ -259,6 +263,15 @@ export default function App(){
     setEmps(p=>p.map(x=>x.id===u.id?u:x));
     if(user?.id===u.id)setUser(u);
     dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id));
+  };
+  const addMsg=async text=>{
+    const res=await supabase.from('messages').insert({text}).select().single();
+    dbW('addMsg',res);
+    if(res.data)setMessages(p=>[...p,res.data]);
+  };
+  const delMsg=async id=>{
+    setMessages(p=>p.filter(m=>m.id!==id));
+    dbW('delMsg',await supabase.from('messages').delete().eq('id',id));
   };
 
   const addRecurring=async rec=>{
@@ -355,13 +368,13 @@ export default function App(){
       {dbError&&<div style={{background:"#fff0f0",borderBottom:`2px solid ${C.red}`,padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:C.red,fontWeight:700}}>⚠ DATABASE ERROR: {dbError}<button onClick={()=>setDbError(null)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontWeight:700,marginLeft:16}}>✕</button></div>}
 
       <div style={{padding:28}}>
-        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal}/>}
+        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg}/>}
         {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave}/>}
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
         {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/>}
-        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp}/>}
+        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg}/>}
       </div>
 
       {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit}/>}
@@ -448,7 +461,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
   const dueToday=recurring.filter(r=>r.active&&r.nextDue<=t0).length;
 
   return(
-    <div style={{maxWidth:980}}>
+    <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Recurring Tasks</div>
@@ -641,7 +654,7 @@ function MC({task,emps,onClick,highlight}){
   </div>;
 }
 
-function Dash({tasks,stats,emps,recurring,onOpen}){
+function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
   const od=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)<today);
   const up=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)>=today).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).slice(0,5);
   const activeRec=recurring.filter(r=>r.active).length;
@@ -651,6 +664,11 @@ function Dash({tasks,stats,emps,recurring,onOpen}){
         <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Dashboard</div>
         <div style={{fontSize:12,color:C.textMuted}}>{fmt(t0)}</div>
       </div>
+      {dashMsg&&<div style={{background:C.navy,padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${C.red}`}}>
+        <span style={{fontSize:10,fontWeight:700,letterSpacing:2,color:C.red,flexShrink:0}}>NOTICE</span>
+        <span style={{width:1,height:14,background:"#ffffff33",flexShrink:0,display:"inline-block"}}/>
+        <span style={{fontSize:13,color:"#fff",lineHeight:1.5}}>{dashMsg.text}</span>
+      </div>}
       <div style={{display:"flex",gap:16,marginBottom:30}}>
         <SC label="TOTAL TASKS"  value={stats.total}    color={C.navy}/>
         <SC label="COMPLETED"    value={stats.done}     color={C.green}  sub={`${Math.round(stats.done/Math.max(stats.total,1)*100)}% done`}/>
@@ -870,9 +888,10 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
-function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
+function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}){
   const[name,setName]=useState("");const[role,setRole]=useState("employee");
   const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
+  const[newMsg,setNewMsg]=useState("");
   const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
   return(
     <div style={{maxWidth:860}}>
@@ -929,6 +948,28 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
             </div>
           );
         })}
+      </div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
+        <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>DASHBOARD MESSAGES</div>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
+          <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>MESSAGE TEXT</div><input value={newMsg} onChange={e=>setNewMsg(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newMsg.trim()){onAddMsg(newMsg.trim());setNewMsg("");}}} placeholder="Enter a message to display on the dashboard..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+          <button onClick={()=>{if(newMsg.trim()){onAddMsg(newMsg.trim());setNewMsg("");}}} disabled={!newMsg.trim()} style={{background:newMsg.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newMsg.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD MESSAGE</button>
+        </div>
+        {messages.length===0?(
+          <div style={{padding:"20px",fontSize:13,color:C.textMuted,fontStyle:"italic"}}>No messages. Add one above to display it on the dashboard.</div>
+        ):(
+          <div>
+            {messages.map((m,i)=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px",borderBottom:`1px solid ${C.border}`}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span style={{fontSize:11,fontWeight:700,color:C.textMuted,minWidth:20}}>{i+1}</span>
+                <span style={{flex:1,fontSize:13,color:C.text,lineHeight:1.5}}>{m.text}</span>
+                <button onClick={()=>onDelMsg(m.id)} style={{background:"none",border:`1px solid ${C.red}`,color:C.red,padding:"4px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700,flexShrink:0}}>REMOVE</button>
+              </div>
+            ))}
+            <div style={{padding:"10px 20px",fontSize:11,color:C.textMuted}}>One message is picked at random each time the dashboard loads.</div>
+          </div>
+        )}
       </div>
       {confirm&&(
         <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>

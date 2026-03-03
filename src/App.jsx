@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "./supabase.js";
 
 const C = {
   bg:"#eef0f6",surface:"#ffffff",card:"#f5f6fa",border:"#d8dcea",
@@ -108,12 +109,17 @@ function NB({label,active,onClick}){return<button onClick={onClick} style={{back
 function SH({label,color,count}){return<div style={{fontSize:11,fontWeight:700,color,letterSpacing:2,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,background:color,borderRadius:"50%"}}/>{label}{count!==undefined?` (${count})`:""}</div>;}
 function SC({label,value,color,sub}){return<div style={{background:C.surface,border:`1px solid ${C.border}`,padding:"18px 22px",flex:1,borderTop:`4px solid ${color}`,boxShadow:"0 1px 6px #0c123014"}}><div style={{fontSize:36,fontWeight:900,color,lineHeight:1}}>{value}</div><div style={{fontSize:11,color:C.navy,letterSpacing:1,marginTop:6,fontWeight:700}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.textMuted,marginTop:3}}>{sub}</div>}</div>;}
 
+// ── DB helpers ────────────────────────────────────────────────────────────────
+const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],recurringId:t.recurring_id});
+const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
+const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App(){
   const[user,setUser]=useState(null);
-  const[emps,setEmps]=useState(EMP0);
-  const[tasks,setTasks]=useState(INIT_TASKS);
-  const[recurring,setRecurring]=useState(INIT_REC);
+  const[emps,setEmps]=useState([]);
+  const[tasks,setTasks]=useState([]);
+  const[recurring,setRecurring]=useState([]);
   const[view,setView]=useState("dashboard");
   const[modal,setModal]=useState(null);
   const[newT,setNewT]=useState(null);
@@ -123,6 +129,38 @@ export default function App(){
   const[fCa,setFCa]=useState("All");
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
+  const[loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    async function load(){
+      const[empRes,taskRes,recRes,goalRes]=await Promise.all([
+        supabase.from('employees').select('*').order('id'),
+        supabase.from('tasks').select('*').order('id'),
+        supabase.from('recurring').select('*').order('id'),
+        supabase.from('goals').select('*').order('id'),
+      ]);
+      const loadedEmps=empRes.data??[];
+      const loadedRec=(recRes.data??[]).map(recFromDb);
+      const loadedTasks=(taskRes.data??[]).map(taskFromDb);
+      const{newTasks,updRec}=genRecurring(loadedRec,loadedTasks);
+      let allTasks=loadedTasks;
+      if(newTasks.length){
+        const rows=newTasks.map(t=>({title:t.title,category:t.category,priority:t.priority,assignee:t.assignee,due_date:t.dueDate,created_by:t.createdBy,description:t.description,status:'To Do',subtasks:[],comments:[],recurring_id:t.recurringId}));
+        const{data:ins}=await supabase.from('tasks').insert(rows).select();
+        if(ins)allTasks=[...loadedTasks,...ins.map(taskFromDb)];
+      }
+      for(const r of updRec){
+        const orig=loadedRec.find(x=>x.id===r.id);
+        if(orig&&orig.nextDue!==r.nextDue)await supabase.from('recurring').update({next_due:r.nextDue}).eq('id',r.id);
+      }
+      setEmps(loadedEmps);
+      setTasks(allTasks);
+      setRecurring(updRec);
+      setGoals((goalRes.data??[]).map(goalFromDb));
+      setLoading(false);
+    }
+    load();
+  },[]);
 
   const isAdmin=user?.role==="admin";
   const canEdit=user&&(user.role==="admin"||user.role==="lead");
@@ -141,67 +179,121 @@ export default function App(){
     critical:tasks.filter(t=>t.priority==="Critical"&&t.status!=="Done").length,
   }),[tasks]);
 
-  const handleTaskSave=updated=>{
+  const handleTaskSave=async updated=>{
     setTasks(p=>p.map(t=>t.id===updated.id?updated:t));
     setModal(updated);
+    await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id);
     if(updated.recurringId&&updated.status==="Done"){
       setRecurring(p=>p.map(r=>{
         if(r.id!==updated.recurringId)return r;
         let nd=r.nextDue;
         while(nd<=t0)nd=advanceNextDue(nd,r.frequency);
+        supabase.from('recurring').update({next_due:nd}).eq('id',r.id);
         return{...r,nextDue:nd};
       }));
     }
   };
 
-  const delTask=id=>{setTasks(p=>p.filter(t=>t.id!==id));setModal(null);};
-  const crtTask=d=>{setTasks(p=>[...p,{...d,id:nextTid++,comments:[]}]);setNewT(null);};
-  const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);return u;}));};
-  const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);return u;}));};
-  const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);return u;}));};
+  const delTask=async id=>{
+    setTasks(p=>p.filter(t=>t.id!==id));
+    setModal(null);
+    await supabase.from('tasks').delete().eq('id',id);
+  };
 
-  const addGoal=g=>setGoals(p=>[...p,{...g,id:nextGid++}]);
-  const updGoal=g=>setGoals(p=>p.map(x=>x.id===g.id?g:x));
-  const delGoal=id=>setGoals(p=>p.filter(g=>g.id!==id));
+  const crtTask=async d=>{
+    const{data}=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
+    if(data)setTasks(p=>[...p,taskFromDb(data)]);
+    setNewT(null);
+  };
 
-  const addEmp=e=>setEmps(p=>[...p,{...e,id:nextEid++,initials:mkI(e.name)}]);
-  const delEmp=id=>{setEmps(p=>p.filter(e=>e.id!==id));setTasks(p=>p.map(t=>t.assignee===id?{...t,assignee:null}:t));};
-  const updEmp=e=>{const u={...e,initials:mkI(e.name)};setEmps(p=>p.map(x=>x.id===u.id?u:x));if(user?.id===u.id)setUser(u);};
+  const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({comments:u.comments}).eq('id',tid);return u;}));};
+  const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid);return u;}));};
+  const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid);return u;}));};
 
-  const addRecurring=rec=>{
-    const r={...rec,id:nextRid++,createdBy:user.id};
+  const addGoal=async g=>{
+    const{data}=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
+    if(data)setGoals(p=>[...p,goalFromDb(data)]);
+  };
+  const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id);};
+  const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));await supabase.from('goals').delete().eq('id',id);};
+
+  const addEmp=async e=>{
+    const initials=mkI(e.name);
+    const{data}=await supabase.from('employees').insert({name:e.name,role:e.role,initials}).select().single();
+    if(data)setEmps(p=>[...p,data]);
+  };
+  const delEmp=async id=>{
+    setEmps(p=>p.filter(e=>e.id!==id));
+    setTasks(p=>p.map(t=>t.assignee===id?{...t,assignee:null}:t));
+    await supabase.from('employees').delete().eq('id',id);
+  };
+  const updEmp=async e=>{
+    const u={...e,initials:mkI(e.name)};
+    setEmps(p=>p.map(x=>x.id===u.id?u:x));
+    if(user?.id===u.id)setUser(u);
+    await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id);
+  };
+
+  const addRecurring=async rec=>{
+    const{data}=await supabase.from('recurring').insert({title:rec.title,category:rec.category,priority:rec.priority,assignee:rec.assignee,description:rec.description,frequency:rec.frequency,day_of_week:rec.dayOfWeek,day_of_month:rec.dayOfMonth,active:rec.active,next_due:rec.nextDue,created_by:user.id}).select().single();
+    if(!data)return;
+    const r=recFromDb(data);
     if(r.active&&r.nextDue<=t0){
       const{newTasks,updRec}=genRecurring([r],tasks);
-      setTasks(p=>[...p,...newTasks]);
-      setRecurring(p=>[...p,updRec[0]]);
+      if(newTasks.length){
+        const rows=newTasks.map(t=>({title:t.title,category:t.category,priority:t.priority,assignee:t.assignee,due_date:t.dueDate,created_by:t.createdBy,description:t.description,status:'To Do',subtasks:[],comments:[],recurring_id:t.recurringId}));
+        const{data:ins}=await supabase.from('tasks').insert(rows).select();
+        if(ins)setTasks(p=>[...p,...ins.map(taskFromDb)]);
+      }
+      await supabase.from('recurring').update({next_due:updRec[0].nextDue}).eq('id',data.id);
+      setRecurring(p=>[...p,{...r,nextDue:updRec[0].nextDue}]);
     }else{
       setRecurring(p=>[...p,r]);
     }
   };
-  const updRecurring=rec=>setRecurring(p=>p.map(r=>r.id===rec.id?rec:r));
-  const delRecurring=id=>{setRecurring(p=>p.filter(r=>r.id!==id));setTasks(p=>p.filter(t=>t.recurringId!==id||t.status==="Done"));};
-  const toggleRecurring=id=>{
-    setRecurring(p=>p.map(r=>{
-      if(r.id!==id)return r;
-      const tog={...r,active:!r.active};
-      if(tog.active&&tog.nextDue<=t0){
-        const{newTasks,updRec}=genRecurring([tog],tasks);
-        if(newTasks.length)setTasks(prev=>[...prev,...newTasks]);
-        return updRec[0];
-      }
-      return tog;
-    }));
+  const updRecurring=async rec=>{
+    setRecurring(p=>p.map(r=>r.id===rec.id?rec:r));
+    await supabase.from('recurring').update({title:rec.title,category:rec.category,priority:rec.priority,assignee:rec.assignee,description:rec.description,frequency:rec.frequency,day_of_week:rec.dayOfWeek,day_of_month:rec.dayOfMonth,active:rec.active,next_due:rec.nextDue}).eq('id',rec.id);
   };
-  const runNow=id=>{
-    setRecurring(p=>p.map(r=>{
-      if(r.id!==id||!r.active)return r;
-      const temp={...r,nextDue:t0};
-      const{newTasks,updRec}=genRecurring([temp],tasks);
-      if(newTasks.length)setTasks(prev=>[...prev,...newTasks]);
-      return updRec[0];
-    }));
+  const delRecurring=async id=>{
+    setRecurring(p=>p.filter(r=>r.id!==id));
+    setTasks(p=>p.filter(t=>t.recurringId!==id||t.status==="Done"));
+    await supabase.from('recurring').delete().eq('id',id);
+    await supabase.from('tasks').delete().eq('recurring_id',id).neq('status','Done');
+  };
+  const toggleRecurring=async id=>{
+    const r=recurring.find(r=>r.id===id);
+    if(!r)return;
+    const tog={...r,active:!r.active};
+    if(tog.active&&tog.nextDue<=t0){
+      const{newTasks,updRec}=genRecurring([tog],tasks);
+      if(newTasks.length){
+        const rows=newTasks.map(t=>({title:t.title,category:t.category,priority:t.priority,assignee:t.assignee,due_date:t.dueDate,created_by:t.createdBy,description:t.description,status:'To Do',subtasks:[],comments:[],recurring_id:t.recurringId}));
+        const{data:ins}=await supabase.from('tasks').insert(rows).select();
+        if(ins)setTasks(prev=>[...prev,...ins.map(taskFromDb)]);
+      }
+      await supabase.from('recurring').update({active:true,next_due:updRec[0].nextDue}).eq('id',id);
+      setRecurring(p=>p.map(r=>r.id===id?updRec[0]:r));
+    }else{
+      await supabase.from('recurring').update({active:tog.active}).eq('id',id);
+      setRecurring(p=>p.map(r=>r.id===id?tog:r));
+    }
+  };
+  const runNow=async id=>{
+    const r=recurring.find(r=>r.id===id);
+    if(!r||!r.active)return;
+    const temp={...r,nextDue:t0};
+    const{newTasks,updRec}=genRecurring([temp],tasks);
+    if(newTasks.length){
+      const rows=newTasks.map(t=>({title:t.title,category:t.category,priority:t.priority,assignee:t.assignee,due_date:t.dueDate,created_by:t.createdBy,description:t.description,status:'To Do',subtasks:[],comments:[],recurring_id:t.recurringId}));
+      const{data:ins}=await supabase.from('tasks').insert(rows).select();
+      if(ins)setTasks(prev=>[...prev,...ins.map(taskFromDb)]);
+    }
+    await supabase.from('recurring').update({next_due:updRec[0].nextDue}).eq('id',id);
+    setRecurring(p=>p.map(r=>r.id===id?updRec[0]:r));
   };
 
+  if(loading)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.navy,fontSize:18,fontWeight:700,letterSpacing:2}}>LOADING…</div>;
   if(!user)return<Login emps={emps} onLogin={setUser}/>;
   const blank={title:"",category:"General",priority:"Medium",status:"To Do",assignee:user.id,dueDate:addDays(today,7),description:"",subtasks:[],createdBy:user.id};
 

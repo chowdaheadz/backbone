@@ -11,7 +11,7 @@ const PRIORITIES=["Low","Medium","High","Critical"];
 const PCOL={Low:"#1d5fa8",Medium:"#1a7f4b",High:"#c2610a",Critical:"#990000"};
 const STATUSES=["To Do","In Progress","Review","Done"];
 const SCOL={"To Do":"#6b7494","In Progress":"#1d5fa8","Review":"#c2610a","Done":"#1a7f4b"};
-const CATEGORIES=["Operations","Marketing","Fulfillment","IT","Finance","HR","General"];
+const CATEGORIES_DEFAULT=["Operations","Marketing","Fulfillment","IT","Finance","HR","General"];
 const ROLES=["admin","lead","employee"];
 const FREQS=["daily","weekly","biweekly","monthly"];
 const DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -107,12 +107,13 @@ function FSel({label,value,onChange,opts}){return<div><div style={{fontSize:10,c
 function ESel({label,value,onChange,opts,full}){return<div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>{label}</div><select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"6px 10px",fontFamily:"inherit",fontSize:12,width:full?"100%":"auto"}}>{opts.map(o=>typeof o==="object"?<option key={o.v} value={o.v}>{o.l}</option>:<option key={o}>{o}</option>)}</select></div>;}
 function NB({label,active,onClick}){return<button onClick={onClick} style={{background:active?C.red:"none",color:"#fff",border:"none",fontFamily:"inherit",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:1,padding:"6px 18px",opacity:active?1:0.65}}>{label}</button>;}
 function SH({label,color,count}){return<div style={{fontSize:11,fontWeight:700,color,letterSpacing:2,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,background:color,borderRadius:"50%"}}/>{label}{count!==undefined?` (${count})`:""}</div>;}
-function SC({label,value,color,sub}){return<div style={{background:C.surface,border:`1px solid ${C.border}`,padding:"18px 22px",flex:1,borderTop:`4px solid ${color}`,boxShadow:"0 1px 6px #0c123014"}}><div style={{fontSize:36,fontWeight:900,color,lineHeight:1}}>{value}</div><div style={{fontSize:11,color:C.navy,letterSpacing:1,marginTop:6,fontWeight:700}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.textMuted,marginTop:3}}>{sub}</div>}</div>;}
+function SC({label,value,color,sub}){return<div style={{background:C.surface,border:`1px solid ${C.border}`,padding:"10px 16px",flex:1,borderTop:`3px solid ${color}`,boxShadow:"0 1px 6px #0c123014"}}><div style={{fontSize:20,fontWeight:900,color,lineHeight:1}}>{value}</div><div style={{fontSize:10,color:C.navy,letterSpacing:1,marginTop:4,fontWeight:700}}>{label}</div>{sub&&<div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{sub}</div>}</div>;}
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
+const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{A:r.check_a,B:r.check_b,C:r.check_c,D:r.check_d}});
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App(){
@@ -120,7 +121,7 @@ export default function App(){
   const[emps,setEmps]=useState([]);
   const[tasks,setTasks]=useState([]);
   const[recurring,setRecurring]=useState([]);
-  const[view,setView]=useState("dashboard");
+  const[view,setView]=useState("list");
   const[modal,setModal]=useState(null);
   const[newT,setNewT]=useState(null);
   const[fSt,setFSt]=useState("All");
@@ -130,18 +131,27 @@ export default function App(){
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
   const[skuCounters,setSkuCounters]=useState([]);
+  const[launches,setLaunches]=useState([]);
+  const[launchReady,setLaunchReady]=useState(false);
+  const[categories,setCategories]=useState(CATEGORIES_DEFAULT);
+  const[catReady,setCatReady]=useState(false);
+  const[messages,setMessages]=useState([]);
+  const[dashMsg,setDashMsg]=useState(null);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
         supabase.from('sku_counters').select('*').order('id'),
+        supabase.from('messages').select('*').order('id'),
+        supabase.from('product_launches').select('*').order('id'),
+        supabase.from('categories').select('*').order('id'),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -166,6 +176,9 @@ export default function App(){
       setSkuCounters(skuData);
       skuData.filter(c=>c.value===1500&&(skuRes.data??[]).find(o=>o.id===c.id)?.value===0)
         .forEach(c=>supabase.from('sku_counters').update({value:1500}).eq('id',c.id));
+      if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
+      if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
+      if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
       setLoading(false);
     }
     load();
@@ -190,7 +203,7 @@ export default function App(){
 
   const handleTaskSave=async updated=>{
     setTasks(p=>p.map(t=>t.id===updated.id?updated:t));
-    setModal(updated);
+    setModal(m=>m&&m.id===updated.id?updated:m);
     dbW('updateTask',await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id));
     if(updated.recurringId&&updated.status==="Done"){
       setRecurring(p=>p.map(r=>{
@@ -243,9 +256,41 @@ export default function App(){
     dbW('decSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
   };
 
+  const addLaunch=async l=>{
+    const res=await supabase.from('product_launches').insert({name:l.name,sku:l.sku,check_a:false,check_b:false,check_c:false,check_d:false}).select().single();
+    dbW('addLaunch',res);
+    if(res.data)setLaunches(p=>[...p,launchFromDb(res.data)]);
+  };
+  const delLaunch=async id=>{
+    setLaunches(p=>p.filter(l=>l.id!==id));
+    dbW('delLaunch',await supabase.from('product_launches').delete().eq('id',id));
+  };
+  const togLaunch=async(id,k)=>{
+    const col={A:'check_a',B:'check_b',C:'check_c',D:'check_d'}[k];
+    const launch=launches.find(l=>l.id===id);
+    if(!launch)return;
+    const newVal=!launch.checks[k];
+    setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:newVal}}:l));
+    dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
+  };
+
+  const addCategory=async name=>{
+    const trimmed=name.trim();
+    if(!trimmed||categories.includes(trimmed))return;
+    const res=await supabase.from('categories').insert({name:trimmed}).select().single();
+    dbW('addCategory',res);
+    if(!res.error){setCategories(p=>[...p,trimmed]);setCatReady(true);}
+  };
+  const delCategory=async name=>{
+    setCategories(p=>p.filter(c=>c!==name));
+    dbW('delCategory',await supabase.from('categories').delete().eq('name',name));
+  };
+
+  const hasPinCol=()=>emps.length>0&&'pin' in emps[0];
   const addEmp=async e=>{
     const initials=mkI(e.name);
-    const res=await supabase.from('employees').insert({name:e.name,role:e.role,initials}).select().single();
+    const payload={name:e.name,role:e.role,initials,...(hasPinCol()&&{pin:e.pin||null})};
+    const res=await supabase.from('employees').insert(payload).select().single();
     dbW('addEmp',res);
     if(res.data)setEmps(p=>[...p,res.data]);
   };
@@ -258,7 +303,19 @@ export default function App(){
     const u={...e,initials:mkI(e.name)};
     setEmps(p=>p.map(x=>x.id===u.id?u:x));
     if(user?.id===u.id)setUser(u);
-    dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id));
+    const payload={name:u.name,role:u.role,initials:u.initials,...(hasPinCol()&&{pin:u.pin||null})};
+    dbW('updEmp',await supabase.from('employees').update(payload).eq('id',u.id));
+  };
+  const addMsg=async text=>{
+    const res=await supabase.from('messages').insert({text}).select().single();
+    if(res.error){console.error('[backbone] addMsg',res.error);return false;}
+    if(res.data)setMessages(p=>[...p,res.data]);
+    return true;
+  };
+  const delMsg=async id=>{
+    setMessages(p=>p.filter(m=>m.id!==id));
+    const res=await supabase.from('messages').delete().eq('id',id);
+    if(res.error)console.error('[backbone] delMsg',res.error);
   };
 
   const addRecurring=async rec=>{
@@ -321,7 +378,7 @@ export default function App(){
   };
 
   if(loading)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.navy,fontSize:18,fontWeight:700,letterSpacing:2}}>LOADING…</div>;
-  if(!user)return<Login emps={emps} onLogin={setUser}/>;
+  if(!user)return<Login emps={emps} onLogin={e=>{setUser(e);setFAs(String(e.id));}}/>;
   const blank={title:"",category:"General",priority:"Medium",status:"To Do",assignee:user.id,dueDate:addDays(today,7),description:"",subtasks:[],createdBy:user.id};
 
   return(
@@ -347,7 +404,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:9}}>
             <Av u={user} size={32}/>
             <div><div style={{fontSize:12,color:"#fff",fontWeight:700}}>{user.name}</div><div style={{fontSize:9,color:"#ffffff77",textTransform:"uppercase",letterSpacing:1}}>{user.role}</div></div>
-            <button onClick={()=>{setUser(null);setView("dashboard");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
+            <button onClick={()=>{setUser(null);setView("list");setFAs("All");setFSt("All");setFPr("All");setFCa("All");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
           </div>
         </div>
       </div>
@@ -355,72 +412,192 @@ export default function App(){
       {dbError&&<div style={{background:"#fff0f0",borderBottom:`2px solid ${C.red}`,padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:C.red,fontWeight:700}}>⚠ DATABASE ERROR: {dbError}<button onClick={()=>setDbError(null)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontWeight:700,marginLeft:16}}>✕</button></div>}
 
       <div style={{padding:28}}>
-        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal}/>}
-        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal}/>}
-        {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
-        {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
+        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg} categories={categories}/>}
+        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave} categories={categories}/>}
+        {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
+        {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/>}
-        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp}/>}
+        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
+        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
 
-      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit}/>}
-      {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)}/>}
+      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit} categories={categories}/>}
+      {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)} categories={categories}/>}
     </div>
   );
 }
 
 // ── SKU Panel ─────────────────────────────────────────────────────────────────
 function SkuPanel({counters,onInc,onDec}){
+  const[open,setOpen]=useState(true);
+  return(
+    <div style={{marginBottom:24}}>
+      <div style={{background:C.navy,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>SKU COUNTERS</div>
+        <span style={{color:"#ffffff88",fontSize:12,fontWeight:700}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"10px 0 0"}}>
+          {counters.map(c=>(
+            <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 4px #0c123010"}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <div style={{fontSize:26,fontWeight:900,color:C.navy,minWidth:54,textAlign:"right"}}>{c.value}</div>
+                <button onClick={()=>onDec(c.id)} style={{width:30,height:30,background:C.textMuted,color:"#fff",border:"none",fontSize:20,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                  onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
+                  onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>
+                <button onClick={()=>onInc(c.id)} style={{width:30,height:30,background:C.navy,color:"#fff",border:"none",fontSize:16,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                  onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
+                  onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Product Launch Panel ───────────────────────────────────────────────────────
+const LAUNCH_CHECKS=["A","B","C","D"];
+function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
+  const[name,setName]=useState("");
+  const[sku,setSku]=useState("");
+  const add=()=>{
+    if(!name.trim()||!sku.trim())return;
+    onAdd({name:name.trim(),sku:sku.trim()});
+    setName("");setSku("");
+  };
+  const toggle=onToggle;
+  const remove=onRemove;
   return(
     <div>
-      <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:20}}>SKU COUNTERS</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-        {counters.map(c=>(
-          <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 6px #0c123012"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value}</div>
-              <button onClick={()=>onDec(c.id)} style={{width:44,height:44,background:C.textMuted,color:"#fff",border:"none",fontSize:28,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
-                onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>
-              <button onClick={()=>onInc(c.id)} style={{width:44,height:44,background:C.navy,color:"#fff",border:"none",fontSize:24,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
-                onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>
-            </div>
-          </div>
-        ))}
+      <div style={{background:C.navy,padding:"10px 16px",fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>PRODUCT LAUNCH</div>
+      {!ready&&(
+        <div style={{padding:"12px 14px",background:"#fffbf0",border:`1px solid ${C.orange}55`,borderTop:"none",borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text}}>
+          <strong style={{color:C.orange}}>Table not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor:
+          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"create table public.product_launches (\n  id bigint generated always as identity primary key,\n  name text not null,\n  sku text not null,\n  check_a boolean default false,\n  check_b boolean default false,\n  check_c boolean default false,\n  check_d boolean default false,\n  created_at timestamptz default now()\n);\nalter table public.product_launches enable row level security;\ncreate policy \"Allow all\" on public.product_launches for all using (true) with check (true);"}</pre>
+        </div>
+      )}
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-end"}}>
+        <div style={{flex:1}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT NAME</div><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. Classic Hoodie" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <div style={{width:150}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT SKU</div><input value={sku} onChange={e=>setSku(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. HDIE-001" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <button onClick={add} disabled={!name.trim()||!sku.trim()} style={{background:name.trim()&&sku.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"7px 20px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:name.trim()&&sku.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap",height:34}}>+ ADD</button>
       </div>
+      {launches.length===0?(
+        <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
+      ):(
+        <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
+          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
+            <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/>
+          </div>
+          {launches.map(l=>{
+            const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
+            const allDone=done===LAUNCH_CHECKS.length;
+            return(
+              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
+                onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
+                  <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
+                </div>
+                <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
+                {LAUNCH_CHECKS.map(k=>(
+                  <div key={k} style={{display:"flex",justifyContent:"center"}}>
+                    <input type="checkbox" checked={l.checks[k]} onChange={()=>toggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
+                  </div>
+                ))}
+                <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
+                  onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
+                  onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 function Login({emps,onLogin}){
-  return(
-    <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
-        <div style={{width:6,height:64,background:C.red}}/>
-        <div>
-          <div style={{fontSize:48,fontWeight:900,color:"#fff",letterSpacing:6,lineHeight:1}}>BACKBONE</div>
-          <div style={{fontSize:11,color:"#ffffff44",letterSpacing:4,marginTop:5}}>BY CHOWDAHEADZ</div>
+  const[sel,setSel]=useState(null);
+  const[pin,setPin]=useState("");
+  const[err,setErr]=useState(false);
+
+  const tapDigit=d=>{
+    if(pin.length>=4)return;
+    const next=pin+d;
+    setPin(next);
+    setErr(false);
+    if(next.length===4)setTimeout(()=>submit(next),120);
+  };
+  const tapBack=()=>{setPin(p=>p.slice(0,-1));setErr(false);};
+  const submit=(p=pin)=>{
+    if(!sel.pin){onLogin(sel);return;}
+    if(p===sel.pin){onLogin(sel);}
+    else{setErr(true);setPin("");}
+  };
+  const goBack=()=>{setSel(null);setPin("");setErr(false);};
+
+  const Logo=()=>(
+    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
+      <div style={{width:6,height:64,background:C.red}}/>
+      <div>
+        <div style={{fontSize:48,fontWeight:900,color:"#fff",letterSpacing:6,lineHeight:1}}>BACKBONE</div>
+        <div style={{fontSize:11,color:"#ffffff44",letterSpacing:4,marginTop:5}}>BY CHOWDAHEADZ</div>
+      </div>
+    </div>
+  );
+
+  if(!sel){
+    return(
+      <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+        <Logo/>
+        <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:370,marginTop:44}}>
+          <div style={{color:"#ffffff55",marginBottom:20,fontSize:12,letterSpacing:3,fontWeight:700}}>SELECT YOUR PROFILE</div>
+          {emps.map(e=>(
+            <button key={e.id} onClick={()=>setSel(e)}
+              style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:"#ffffff09",border:"1px solid #ffffff14",padding:"13px 16px",marginBottom:8,cursor:"pointer",fontFamily:"inherit",color:"#fff",textAlign:"left"}}
+              onMouseEnter={x=>x.currentTarget.style.background="#ffffff18"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff09"}>
+              <Av u={e} size={38}/>
+              <div>
+                <div style={{fontSize:14,fontWeight:700}}>{e.name}</div>
+                <div style={{fontSize:10,color:e.role==="admin"?"#ff8888":e.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{e.role}</div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
-      <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:370,marginTop:44}}>
-        <div style={{color:"#ffffff55",marginBottom:20,fontSize:12,letterSpacing:3,fontWeight:700}}>SELECT YOUR PROFILE</div>
-        {emps.map(e=>(
-          <button key={e.id} onClick={()=>onLogin(e)}
-            style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:"#ffffff09",border:"1px solid #ffffff14",padding:"13px 16px",marginBottom:8,cursor:"pointer",fontFamily:"inherit",color:"#fff",textAlign:"left"}}
-            onMouseEnter={x=>x.currentTarget.style.background="#ffffff18"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff09"}>
-            <Av u={e} size={38}/>
-            <div>
-              <div style={{fontSize:14,fontWeight:700}}>{e.name}</div>
-              <div style={{fontSize:10,color:e.role==="admin"?"#ff8888":e.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{e.role}</div>
-            </div>
-          </button>
-        ))}
+    );
+  }
+
+  const btnStyle={background:"#ffffff14",border:"1px solid #ffffff22",color:"#fff",fontFamily:"inherit",fontSize:22,fontWeight:700,cursor:"pointer",padding:"18px 0",borderRadius:0,letterSpacing:1};
+  return(
+    <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+      <Logo/>
+      <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:320,marginTop:44,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
+        <Av u={sel} size={56}/>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>{sel.name}</div>
+          <div style={{fontSize:10,color:sel.role==="admin"?"#ff8888":sel.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:2,marginTop:4}}>{sel.role}</div>
+        </div>
+        <div style={{fontSize:11,color:"#ffffff55",letterSpacing:3,fontWeight:700}}>ENTER YOUR PIN</div>
+        <div style={{display:"flex",gap:14}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{width:16,height:16,borderRadius:"50%",background:i<pin.length?"#fff":"transparent",border:"2px solid #ffffff66",transition:"background 0.1s"}}/>
+          ))}
+        </div>
+        {err&&<div style={{fontSize:12,color:C.red,fontWeight:700,letterSpacing:1}}>INCORRECT PIN — TRY AGAIN</div>}
+        {!sel.pin&&<div style={{fontSize:11,color:"#ffb86c",fontWeight:700,letterSpacing:1,textAlign:"center"}}>NO PIN SET — CONTACT ADMIN</div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%"}}>
+          {[1,2,3,4,5,6,7,8,9].map(d=>(
+            <button key={d} onClick={()=>tapDigit(String(d))} style={{...btnStyle}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>{d}</button>
+          ))}
+          <button onClick={goBack} style={{...btnStyle,fontSize:11,letterSpacing:2,color:"#ffffff88"}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>← BACK</button>
+          <button onClick={()=>tapDigit("0")} style={{...btnStyle}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>0</button>
+          <button onClick={tapBack} style={{...btnStyle,fontSize:18}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>⌫</button>
+        </div>
       </div>
     </div>
   );
@@ -429,7 +606,7 @@ function Login({emps,onLogin}){
 // ── Recurring Panel ───────────────────────────────────────────────────────────
 const BLANK_REC={title:"",category:"Operations",priority:"Medium",assignee:null,description:"",frequency:"weekly",dayOfWeek:1,dayOfMonth:1,active:true,nextDue:t0};
 
-function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle,onRunNow}){
+function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle,onRunNow,categories}){
   const[showForm,setShowForm]=useState(false);
   const[editingId,setEditingId]=useState(null);
   const[draft,setDraft]=useState(null);
@@ -448,10 +625,10 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
   const dueToday=recurring.filter(r=>r.active&&r.nextDue<=t0).length;
 
   return(
-    <div style={{maxWidth:980}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Recurring Tasks</div>
+          <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>RECURRING TASKS</div>
           <span style={{background:C.purple+"18",color:C.purple,border:`1px solid ${C.purple}44`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>AUTO-GENERATES</span>
         </div>
         {canEdit&&<button onClick={startAdd} style={{background:C.red,color:"#fff",border:"none",padding:"9px 22px",fontFamily:"inherit",fontWeight:700,cursor:"pointer",fontSize:12,letterSpacing:1}}>+ NEW RECURRING TASK</button>}
@@ -460,9 +637,9 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
       {/* Stats */}
       <div style={{display:"flex",gap:14,marginBottom:32}}>
         {[{l:"TOTAL TEMPLATES",v:recurring.length,c:C.navy},{l:"ACTIVE",v:active,c:C.green},{l:"PAUSED",v:recurring.length-active,c:C.textMuted},{l:"DUE TODAY",v:dueToday,c:dueToday>0?C.red:C.textMuted}].map(s=>(
-          <div key={s.l} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderTop:`4px solid ${s.c}`,padding:"14px 18px",boxShadow:"0 1px 4px #0c123010"}}>
-            <div style={{fontSize:28,fontWeight:900,color:s.c}}>{s.v}</div>
-            <div style={{fontSize:10,color:C.navy,letterSpacing:1,fontWeight:700,marginTop:4}}>{s.l}</div>
+          <div key={s.l} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderTop:`3px solid ${s.c}`,padding:"7px 18px",boxShadow:"0 1px 4px #0c123010"}}>
+            <div style={{fontSize:18,fontWeight:900,color:s.c}}>{s.v}</div>
+            <div style={{fontSize:10,color:C.navy,letterSpacing:1,fontWeight:700,marginTop:2}}>{s.l}</div>
           </div>
         ))}
       </div>
@@ -487,7 +664,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
           return(
             <div key={r.id} style={{borderBottom:`1px solid ${C.border}`,opacity:r.active?1:0.65}}
               onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"2.2fr 1.2fr 1fr 110px 110px 160px",gap:12,alignItems:"center"}}>
+              <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"2.2fr 1.2fr 1fr 110px 110px 210px",gap:12,alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:C.text,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{width:10,height:10,borderRadius:"50%",background:FCOL[r.frequency],flexShrink:0,display:"inline-block"}}/>
@@ -514,7 +691,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
                     :<span style={{background:"#eee",color:C.textMuted,border:`1px solid ${C.border}`,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>⏸ PAUSED</span>
                   }
                 </div>
-                <div style={{display:"flex",gap:5,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:5,justifyContent:"flex-end",flexWrap:"nowrap"}}>
                   {canEdit&&r.active&&<button onClick={()=>onRunNow(r.id)} title="Generate an instance right now" style={{background:"none",border:`1px solid ${C.purple}`,color:C.purple,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>↻ NOW</button>}
                   {canEdit&&<button onClick={()=>startEdit(r)} style={{background:"none",border:`1px solid ${C.navy}`,color:C.navy,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>EDIT</button>}
                   {canEdit&&<button onClick={()=>onToggle(r.id)} style={{background:"none",border:`1px solid ${r.active?C.orange:C.green}`,color:r.active?C.orange:C.green,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>{r.active?"PAUSE":"RESUME"}</button>}
@@ -580,7 +757,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
 
               {/* Task settings */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:18}}>
-                <ESel label="CATEGORY"         value={draft.category}     onChange={v=>setDraft({...draft,category:v})}             opts={CATEGORIES} full/>
+                <ESel label="CATEGORY"         value={draft.category}     onChange={v=>setDraft({...draft,category:v})}             opts={categories} full/>
                 <ESel label="PRIORITY"         value={draft.priority}     onChange={v=>setDraft({...draft,priority:v})}             opts={PRIORITIES} full/>
                 <ESel label="DEFAULT ASSIGNEE" value={draft.assignee||""} onChange={v=>setDraft({...draft,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
               </div>
@@ -641,16 +818,21 @@ function MC({task,emps,onClick,highlight}){
   </div>;
 }
 
-function Dash({tasks,stats,emps,recurring,onOpen}){
+function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories}){
   const od=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)<today);
   const up=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)>=today).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).slice(0,5);
   const activeRec=recurring.filter(r=>r.active).length;
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Dashboard</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>DASHBOARD</div>
         <div style={{fontSize:12,color:C.textMuted}}>{fmt(t0)}</div>
       </div>
+      {dashMsg&&<div style={{background:"#f0f1f4",padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${C.red}`}}>
+        <span style={{fontSize:10,fontWeight:700,letterSpacing:2,color:C.red,flexShrink:0}}>NOTICE</span>
+        <span style={{width:1,height:14,background:`${C.navy}33`,flexShrink:0,display:"inline-block"}}/>
+        <span style={{fontSize:13,color:C.navy,lineHeight:1.5}}>{dashMsg.text}</span>
+      </div>}
       <div style={{display:"flex",gap:16,marginBottom:30}}>
         <SC label="TOTAL TASKS"  value={stats.total}    color={C.navy}/>
         <SC label="COMPLETED"    value={stats.done}     color={C.green}  sub={`${Math.round(stats.done/Math.max(stats.total,1)*100)}% done`}/>
@@ -663,7 +845,7 @@ function Dash({tasks,stats,emps,recurring,onOpen}){
         <div><SH label="UPCOMING DUE" color={C.navy}/>{up.length===0?<div style={{color:C.textMuted,fontSize:13}}>Nothing due soon.</div>:up.map(t=><MC key={t.id} task={t} emps={emps} onClick={()=>onOpen(t)}/>)}</div>
         <div>
           <SH label="BY CATEGORY" color={C.navy}/>
-          {CATEGORIES.map(cat=>{const n=tasks.filter(t=>t.category===cat&&t.status!=="Done").length;if(!n)return null;return<div key={cat} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span>{cat}</span><span style={{color:C.navy,fontWeight:800}}>{n}</span></div>;})}
+          {categories.map(cat=>{const n=tasks.filter(t=>t.category===cat&&t.status!=="Done").length;if(!n)return null;return<div key={cat} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span>{cat}</span><span style={{color:C.navy,fontWeight:800}}>{n}</span></div>;})}
         </div>
       </div>
       <div style={{marginTop:32}}>
@@ -677,18 +859,18 @@ function Dash({tasks,stats,emps,recurring,onOpen}){
 }
 
 // ── List View ─────────────────────────────────────────────────────────────────
-function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen}){
+function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen,onUpdate,categories}){
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>All Tasks</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>TASKS</div>
         <div style={{fontSize:12,color:C.textMuted}}>{tasks.length} task{tasks.length!==1?"s":""}</div>
       </div>
       <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
         <FSel label="STATUS"   value={fSt} onChange={setFSt} opts={["All",...STATUSES]}/>
         <FSel label="PRIORITY" value={fPr} onChange={setFPr} opts={["All",...PRIORITIES]}/>
         <FSel label="ASSIGNEE" value={fAs} onChange={setFAs} opts={[{v:"All",l:"All"},...emps.map(e=>({v:e.id,l:e.name}))]}/>
-        <FSel label="CATEGORY" value={fCa} onChange={setFCa} opts={["All",...CATEGORIES]}/>
+        <FSel label="CATEGORY" value={fCa} onChange={setFCa} opts={["All",...categories]}/>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,boxShadow:"0 1px 6px #0c123012"}}>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 130px 110px",padding:"10px 16px",background:C.navy,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
@@ -708,9 +890,20 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
               </div>
               <div style={{fontSize:12,color:C.textMuted,display:"flex",alignItems:"center"}}>{task.category}</div>
               <div style={{display:"flex",alignItems:"center",gap:7}}>{emp?<><Av u={emp} size={24}/><span style={{fontSize:12,fontWeight:500}}>{emp.name}</span></>:<span style={{fontSize:12,color:C.textMuted}}>Unassigned</span>}</div>
-              <div style={{fontSize:12,color:od?C.red:C.textMuted,display:"flex",alignItems:"center",fontWeight:od?700:400}}>{fmtS(task.dueDate)}{od?" ⚠":""}</div>
-              <div style={{display:"flex",alignItems:"center"}}><SB status={task.status}/></div>
-              <div style={{display:"flex",alignItems:"center"}}><PB priority={task.priority}/></div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                <input type="date" value={task.dueDate||""} onChange={e=>onUpdate({...task,dueDate:e.target.value})}
+                  style={{background:"transparent",border:"none",color:od?C.red:C.textMuted,fontSize:12,fontFamily:"inherit",fontWeight:od?700:400,cursor:"pointer",padding:0,width:"100%",colorScheme:"dark"}}/>
+              </div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                {(()=>{const sc=SCOL[task.status];return<select value={task.status} onChange={e=>onUpdate({...task,status:e.target.value})}
+                  style={{background:sc+"18",color:sc,border:`1px solid ${sc}66`,padding:"2px 6px",fontSize:10,letterSpacing:1,fontWeight:700,fontFamily:"inherit",cursor:"pointer",appearance:"none",WebkitAppearance:"none",textTransform:"uppercase",outline:"none"}}>
+                  {STATUSES.map(s=><option key={s} value={s}>{s.toUpperCase()}</option>)}</select>;})()}
+              </div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                {(()=>{const pc=PCOL[task.priority];return<select value={task.priority} onChange={e=>onUpdate({...task,priority:e.target.value})}
+                  style={{background:pc+"18",color:pc,border:`1px solid ${pc}66`,padding:"2px 6px",fontSize:10,letterSpacing:1,fontWeight:700,fontFamily:"inherit",cursor:"pointer",appearance:"none",WebkitAppearance:"none",textTransform:"uppercase",outline:"none"}}>
+                  {PRIORITIES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>;})()}
+              </div>
             </div>
           );
         })}
@@ -720,20 +913,40 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
-function CalView({tasks,month,setMonth,onOpen}){
+function CalView({tasks,month,setMonth,onOpen,categories}){
   const yr=month.getFullYear(),mo=month.getMonth();
+  const[selCats,setSelCats]=useState(new Set());
+  const toggleCat=cat=>setSelCats(prev=>{const s=new Set(prev);s.has(cat)?s.delete(cat):s.add(cat);return s;});
+  const allSelected=selCats.size===0;
+  const visibleTasks=allSelected?tasks:tasks.filter(t=>selCats.has(t.category));
   const cells=[...Array(new Date(yr,mo,1).getDay()).fill(null),...Array.from({length:new Date(yr,mo+1,0).getDate()},(_,i)=>i+1)];
   const byDay={};
-  tasks.forEach(t=>{if(!t.dueDate)return;const d=new Date(t.dueDate);if(d.getFullYear()===yr&&d.getMonth()===mo){if(!byDay[d.getDate()])byDay[d.getDate()]=[];byDay[d.getDate()].push(t);}});
+  visibleTasks.forEach(t=>{if(!t.dueDate)return;const[dy,dm,dd]=t.dueDate.split('-').map(Number);if(dy===yr&&dm-1===mo){if(!byDay[dd])byDay[dd]=[];byDay[dd].push(t);}});
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Calendar</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>CALENDAR</div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>setMonth(new Date(yr,mo-1,1))} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 16px",fontFamily:"inherit",cursor:"pointer",fontWeight:700}}>←</button>
           <div style={{fontSize:14,color:C.navy,fontWeight:800,minWidth:150,textAlign:"center"}}>{month.toLocaleDateString("en-US",{month:"long",year:"numeric"}).toUpperCase()}</div>
           <button onClick={()=>setMonth(new Date(yr,mo+1,1))} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 16px",fontFamily:"inherit",cursor:"pointer",fontWeight:700}}>→</button>
         </div>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12,padding:"10px 12px",background:C.surface,border:`1px solid ${C.border}`}}>
+        <span style={{fontSize:10,color:C.textMuted,fontWeight:700,letterSpacing:1,alignSelf:"center",marginRight:4}}>FILTER:</span>
+        <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,fontWeight:700,color:allSelected?C.navy:C.textMuted,background:allSelected?C.navy+"18":"none",border:`1px solid ${allSelected?C.navy:C.border}`,padding:"3px 10px"}}>
+          <input type="checkbox" checked={allSelected} onChange={()=>setSelCats(new Set())} style={{accentColor:C.navy,cursor:"pointer"}}/>
+          ALL
+        </label>
+        {categories.map(cat=>{
+          const active=selCats.has(cat);
+          return(
+            <label key={cat} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,fontWeight:700,color:active?C.navy:C.textMuted,background:active?C.navy+"18":"none",border:`1px solid ${active?C.navy:C.border}`,padding:"3px 10px"}}>
+              <input type="checkbox" checked={active} onChange={()=>toggleCat(cat)} style={{accentColor:C.navy,cursor:"pointer"}}/>
+              {cat}
+            </label>
+          );
+        })}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
         {["SUN","MON","TUE","WED","THU","FRI","SAT"].map(d=><div key={d} style={{background:C.navy,color:"#fff",padding:8,textAlign:"center",fontSize:11,letterSpacing:1,fontWeight:700}}>{d}</div>)}
@@ -741,9 +954,9 @@ function CalView({tasks,month,setMonth,onOpen}){
           const isT=day===today.getDate()&&yr===today.getFullYear()&&mo===today.getMonth();
           const dt=day?(byDay[day]||[]):[];
           return<div key={i} style={{background:C.surface,minHeight:90,padding:6,border:isT?`2px solid ${C.red}`:`1px solid ${C.border}`}}>
-            {day&&<div style={{fontSize:12,color:isT?C.red:C.textMuted,marginBottom:4,fontWeight:isT?800:400}}>{day}</div>}
-            {dt.slice(0,3).map(t=><div key={t.id} onClick={()=>onOpen(t)} style={{fontSize:10,color:"#fff",background:t.recurringId?C.purple:PCOL[t.priority],padding:"2px 5px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",fontWeight:600}}>{t.recurringId?"↻ ":""}{t.title}</div>)}
-            {dt.length>3&&<div style={{fontSize:10,color:C.textMuted}}>+{dt.length-3} more</div>}
+            {day&&<div style={{fontSize:13,color:isT?C.red:C.textMuted,marginBottom:4,fontWeight:isT?800:400}}>{day}</div>}
+            {dt.slice(0,3).map(t=><div key={t.id} onClick={()=>onOpen(t)} style={{fontSize:11,color:"#fff",background:t.recurringId?C.purple:PCOL[t.priority],padding:"2px 5px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",fontWeight:600}}>{t.recurringId?"↻ ":""}{t.title}</div>)}
+            {dt.length>3&&<div style={{fontSize:11,color:C.textMuted}}>+{dt.length-3} more</div>}
           </div>;
         })}
       </div>
@@ -758,7 +971,7 @@ function CalView({tasks,month,setMonth,onOpen}){
 }
 
 // ── Task Modal ────────────────────────────────────────────────────────────────
-function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,canEdit}){
+function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,canEdit,categories}){
   const[ed,setEd]=useState(false);
   const[dr,setDr]=useState(null);
   const[ct,setCt]=useState("");
@@ -801,7 +1014,7 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20,padding:16,background:C.card,border:`1px solid ${C.border}`}}>
               <ESel label="STATUS"   value={dr.status}        onChange={v=>setDr({...dr,status:v})}               opts={STATUSES}   full/>
               <ESel label="PRIORITY" value={dr.priority}      onChange={v=>setDr({...dr,priority:v})}             opts={PRIORITIES} full/>
-              <ESel label="CATEGORY" value={dr.category}      onChange={v=>setDr({...dr,category:v})}             opts={CATEGORIES} full/>
+              <ESel label="CATEGORY" value={dr.category}      onChange={v=>setDr({...dr,category:v})}             opts={categories} full/>
               <ESel label="ASSIGNEE" value={dr.assignee||""} onChange={v=>setDr({...dr,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
               <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>DUE DATE</div><input type="date" value={dr.dueDate} onChange={e=>setDr({...dr,dueDate:e.target.value})} style={{background:C.surface,border:`1.5px solid ${C.border}`,color:C.text,padding:"6px 10px",fontFamily:"inherit",fontSize:12,width:"100%",boxSizing:"border-box"}}/></div>
             </div>
@@ -833,7 +1046,7 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
 }
 
 // ── New Task Modal ────────────────────────────────────────────────────────────
-function NewTaskModal({task,emps,onChange,onCreate,onClose}){
+function NewTaskModal({task,emps,onChange,onCreate,onClose,categories}){
   return(
     <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={onClose}>
       <div style={{background:C.surface,width:560,boxShadow:"0 12px 50px #0c123055",borderTop:`4px solid ${C.red}`}} onClick={e=>e.stopPropagation()}>
@@ -842,7 +1055,7 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
           <div style={{marginBottom:16}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>TITLE *</div><input value={task.title} onChange={e=>onChange({...task,title:e.target.value})} placeholder="Task title..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"10px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box"}}/></div>
           <div style={{marginBottom:16}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>DESCRIPTION</div><textarea value={task.description} onChange={e=>onChange({...task,description:e.target.value})} rows={3} placeholder="Details..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
-            <ESel label="CATEGORY"  value={task.category}     onChange={v=>onChange({...task,category:v})}             opts={CATEGORIES} full/>
+            <ESel label="CATEGORY"  value={task.category}     onChange={v=>onChange({...task,category:v})}             opts={categories} full/>
             <ESel label="PRIORITY"  value={task.priority}     onChange={v=>onChange({...task,priority:v})}             opts={PRIORITIES} full/>
             <ESel label="STATUS"    value={task.status}       onChange={v=>onChange({...task,status:v})}               opts={STATUSES}   full/>
             <ESel label="ASSIGN TO" value={task.assignee||""} onChange={v=>onChange({...task,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
@@ -859,14 +1072,48 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
-function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
-  const[name,setName]=useState("");const[role,setRole]=useState("employee");
-  const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
-  const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
+function CategoriesSection({categories,catReady,onAdd,onDel}){
+  const[newCat,setNewCat]=useState("");
+  const doAdd=()=>{if(newCat.trim()){onAdd(newCat.trim());setNewCat("");}};
   return(
-    <div style={{maxWidth:860}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Admin Panel</div>
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
+      <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>TASK CATEGORIES</div>
+      {!catReady&&(
+        <div style={{padding:"12px 20px",background:"#fffbf0",border:`1px solid ${C.orange}33`,borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text,lineHeight:1.7}}>
+          <strong style={{color:C.orange}}>Categories table not set up.</strong> Changes won't persist until you run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{"create table public.categories (\n  id bigint generated always as identity primary key,\n  name text not null unique\n);\nalter table public.categories enable row level security;\ncreate policy \"Allow all\" on public.categories for all using (true) with check (true);\n-- seed defaults\ninsert into public.categories (name) values\n  ('Operations'),('Marketing'),('Fulfillment'),\n  ('IT'),('Finance'),('HR'),('General');"}</pre>
+        </div>
+      )}
+      <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
+        <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>CATEGORY NAME</div><input value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="e.g. Logistics" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <button onClick={doAdd} disabled={!newCat.trim()} style={{background:newCat.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newCat.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD CATEGORY</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,padding:"14px 20px"}}>
+        {categories.map(cat=>(
+          <div key={cat} style={{display:"flex",alignItems:"center",gap:0,background:C.card,border:`1px solid ${C.border}`}}>
+            <span style={{padding:"5px 12px",fontSize:12,fontWeight:700,color:C.navy,letterSpacing:0.5}}>{cat}</span>
+            <button onClick={()=>onDel(cat)} style={{background:"none",border:"none",borderLeft:`1px solid ${C.border}`,color:C.textMuted,padding:"5px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit",lineHeight:1}}
+              onMouseEnter={x=>{x.currentTarget.style.background=C.red+"18";x.currentTarget.style.color=C.red;}}
+              onMouseLeave={x=>{x.currentTarget.style.background="none";x.currentTarget.style.color=C.textMuted;}}>✕</button>
+          </div>
+        ))}
+        {categories.length===0&&<span style={{fontSize:12,color:C.textMuted,fontStyle:"italic"}}>No categories. Add one above.</span>}
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,categories,catReady,onAddCat,onDelCat}){
+  const[name,setName]=useState("");const[role,setRole]=useState("employee");const[addPin,setAddPin]=useState("");
+  const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
+  const[newMsg,setNewMsg]=useState("");
+  const[msgErr,setMsgErr]=useState(false);
+  const pinValid=p=>!p||/^\d{4}$/.test(p);
+  const doAdd=()=>{if(!name.trim()||!pinValid(addPin))return;onAdd({name:name.trim(),role,pin:addPin||null});setName("");setRole("employee");setAddPin("");};
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>ADMIN PANEL</div>
         <span style={{background:C.red+"18",color:C.red,border:`1px solid ${C.red}55`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>ADMIN ONLY</span>
       </div>
       <div style={{display:"flex",gap:14,marginBottom:32}}>
@@ -879,12 +1126,19 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
         <div style={{padding:"18px 20px",display:"flex",gap:12,alignItems:"flex-end"}}>
           <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>FULL NAME</div><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="e.g. Jamie Lee" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box"}}/></div>
           <div style={{width:160}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>ROLE</div><select value={role} onChange={e=>setRole(e.target.value)} style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13}}>{ROLES.map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}</select></div>
-          <button onClick={doAdd} disabled={!name.trim()} style={{background:name.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 24px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:name.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD EMPLOYEE</button>
+          <div style={{width:120}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>PIN (4 digits)</div><input value={addPin} onChange={e=>setAddPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="e.g. 1234" maxLength={4} style={{width:"100%",background:C.card,border:`1.5px solid ${addPin&&!pinValid(addPin)?C.red:C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box",letterSpacing:4,textAlign:"center"}}/></div>
+          <button onClick={doAdd} disabled={!name.trim()||!pinValid(addPin)} style={{background:name.trim()&&pinValid(addPin)?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 24px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:name.trim()&&pinValid(addPin)?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD EMPLOYEE</button>
         </div>
       </div>
+      {emps.length>0&&emps[0].pin===undefined&&(
+        <div style={{padding:"12px 20px",background:"#fffbf0",border:`1px solid ${C.orange}55`,borderLeft:`4px solid ${C.orange}`,marginBottom:16,fontSize:12,color:C.text}}>
+          <strong style={{color:C.orange}}>PIN column not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor to enable PINs:
+          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS pin varchar(4);"}</pre>
+        </div>
+      )}
       <div style={{background:C.surface,border:`1px solid ${C.border}`,boxShadow:"0 1px 6px #0c123012"}}>
-        <div style={{background:C.navy,padding:"11px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 100px 120px",gap:12,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
-          <div/><div>NAME</div><div>ROLE</div><div>OPEN TASKS</div><div style={{textAlign:"right"}}>ACTIONS</div>
+        <div style={{background:C.navy,padding:"11px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 80px 100px 120px",gap:12,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
+          <div/><div>NAME</div><div>ROLE</div><div>PIN</div><div>OPEN TASKS</div><div style={{textAlign:"right"}}>ACTIONS</div>
         </div>
         {emps.map(emp=>{
           const open=tasks.filter(t=>t.assignee===emp.id&&t.status!=="Done").length;
@@ -897,6 +1151,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
                     <Av u={{initials:mkI(draft.name||" ")}} size={38}/>
                     <div style={{flex:1}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>NAME</div><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} style={{width:"100%",background:C.surface,border:`1.5px solid ${C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
                     <div style={{width:160}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>ROLE</div><select value={draft.role} onChange={e=>setDraft({...draft,role:e.target.value})} style={{width:"100%",background:C.surface,border:`1.5px solid ${C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13}}>{ROLES.map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}</select></div>
+                    <div style={{width:110}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>PIN (4 digits)</div><input value={draft.pin||""} onChange={e=>setDraft({...draft,pin:e.target.value.replace(/\D/g,"").slice(0,4)||null})} placeholder="set pin" maxLength={4} style={{width:"100%",background:C.surface,border:`1.5px solid ${draft.pin&&draft.pin.length!==4?C.red:C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box",letterSpacing:4,textAlign:"center"}}/></div>
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>{onUpd(draft);setEditId(null);}} style={{background:C.green,border:"none",color:"#fff",padding:"8px 18px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>SAVE</button>
                       <button onClick={()=>setEditId(null)} style={{background:"none",border:`1.5px solid ${C.border}`,color:C.textMuted,padding:"8px 14px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>CANCEL</button>
@@ -904,10 +1159,11 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
                   </div>
                 </div>
               ):(
-                <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 100px 120px",gap:12,alignItems:"center"}}
+                <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 80px 100px 120px",gap:12,alignItems:"center"}}
                   onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <Av u={emp} size={38}/><div><div style={{fontSize:14,fontWeight:700}}>{emp.name}{isSelf&&<span style={{fontSize:10,color:C.textMuted,marginLeft:8,fontWeight:400}}>(you)</span>}</div></div>
                   <div><RP role={emp.role}/></div>
+                  <div style={{fontSize:12,color:emp.pin?C.text:C.textMuted,letterSpacing:emp.pin?3:0,fontWeight:emp.pin?700:400}}>{emp.pin?"••••":"—"}</div>
                   <div style={{fontSize:13,color:open>3?C.red:C.textMuted,fontWeight:open>0?700:400}}>{open} open</div>
                   <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
                     <button onClick={()=>{setEditId(emp.id);setDraft({...emp});}} style={{background:"none",border:`1px solid ${C.navy}`,color:C.navy,padding:"5px 13px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>EDIT</button>
@@ -919,6 +1175,33 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
           );
         })}
       </div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
+        <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>DASHBOARD MESSAGES</div>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
+          <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>MESSAGE TEXT</div><input value={newMsg} onChange={e=>{setNewMsg(e.target.value);setMsgErr(false);}} onKeyDown={e=>{if(e.key==="Enter"&&newMsg.trim()){onAddMsg(newMsg.trim()).then(ok=>{if(ok)setNewMsg("");else setMsgErr(true);})}}} placeholder="Enter a message to display on the dashboard..." style={{width:"100%",background:C.card,border:`1.5px solid ${msgErr?C.red:C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+          <button onClick={()=>{if(newMsg.trim())onAddMsg(newMsg.trim()).then(ok=>{if(ok)setNewMsg("");else setMsgErr(true);});}} disabled={!newMsg.trim()} style={{background:newMsg.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newMsg.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD MESSAGE</button>
+        </div>
+        {msgErr&&<div style={{padding:"12px 20px",background:"#fff3f3",borderBottom:`1px solid ${C.red}33`,fontSize:12,color:C.red,lineHeight:1.7}}>
+          ⚠ The <code style={{background:"#fde8e8",padding:"1px 5px"}}>messages</code> table doesn't exist yet. Run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{"create table public.messages (\n  id bigint generated always as identity primary key,\n  text text not null,\n  created_at timestamptz default now()\n);\nalter table public.messages enable row level security;\ncreate policy \"Allow all\" on public.messages for all using (true) with check (true);"}</pre>
+        </div>}
+        {messages.length===0&&!msgErr?(
+          <div style={{padding:"20px",fontSize:13,color:C.textMuted,fontStyle:"italic"}}>No messages. Add one above to display it on the dashboard.</div>
+        ):(
+          <div>
+            {messages.map((m,i)=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px",borderBottom:`1px solid ${C.border}`}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span style={{fontSize:11,fontWeight:700,color:C.textMuted,minWidth:20}}>{i+1}</span>
+                <span style={{flex:1,fontSize:13,color:C.text,lineHeight:1.5}}>{m.text}</span>
+                <button onClick={()=>onDelMsg(m.id)} style={{background:"none",border:`1px solid ${C.red}`,color:C.red,padding:"4px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700,flexShrink:0}}>REMOVE</button>
+              </div>
+            ))}
+            <div style={{padding:"10px 20px",fontSize:11,color:C.textMuted}}>One message is picked at random each time the dashboard loads.</div>
+          </div>
+        )}
+      </div>
+      <CategoriesSection categories={categories} catReady={catReady} onAdd={onAddCat} onDel={onDelCat}/>
       {confirm&&(
         <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
           <div style={{background:C.surface,width:430,borderTop:`4px solid ${C.red}`,boxShadow:"0 12px 50px #0c123055"}}>
@@ -948,7 +1231,7 @@ function GoalsPanel({emps,goals,onAdd,onUpd,onDel}){
   };
   return(
     <div style={{width:"100%"}}>
-      <div style={{fontSize:22,fontWeight:800,color:C.navy,marginBottom:28}}>Goals</div>
+      <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:16}}>GOALS</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       {emps.map(emp=>{
         const empGoals=goals.filter(g=>g.empId===emp.id);

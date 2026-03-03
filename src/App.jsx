@@ -947,8 +947,9 @@ function GoalsPanel({emps,goals,onAdd,onUpd,onDel}){
     setDrafts(d=>({...d,[empId]:""}));
   };
   return(
-    <div style={{maxWidth:860}}>
+    <div style={{width:"100%"}}>
       <div style={{fontSize:22,fontWeight:800,color:C.navy,marginBottom:28}}>Goals</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       {emps.map(emp=>{
         const empGoals=goals.filter(g=>g.empId===emp.id);
         const draft=drafts[emp.id]||"";
@@ -983,6 +984,7 @@ function GoalsPanel({emps,goals,onAdd,onUpd,onDel}){
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

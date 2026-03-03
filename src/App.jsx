@@ -139,6 +139,7 @@ export default function App(){
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
       ]);
+      if(empRes.error||taskRes.error||recRes.error||goalRes.error)console.error('[backbone] load error',empRes.error,taskRes.error,recRes.error,goalRes.error);
       const loadedEmps=empRes.data??[];
       const loadedRec=(recRes.data??[]).map(recFromDb);
       const loadedTasks=(taskRes.data??[]).map(taskFromDb);
@@ -201,7 +202,8 @@ export default function App(){
   };
 
   const crtTask=async d=>{
-    const{data}=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
+    const{data,error}=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
+    if(error)console.error('[backbone] crtTask error',error);
     if(data)setTasks(p=>[...p,taskFromDb(data)]);
     setNewT(null);
   };
@@ -211,7 +213,8 @@ export default function App(){
   const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid);return u;}));};
 
   const addGoal=async g=>{
-    const{data}=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
+    const{data,error}=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
+    if(error)console.error('[backbone] addGoal error',error);
     if(data)setGoals(p=>[...p,goalFromDb(data)]);
   };
   const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id);};

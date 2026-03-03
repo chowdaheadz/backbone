@@ -16,6 +16,8 @@ const FREQS=["daily","weekly","biweekly","monthly"];
 const DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const FCOL={daily:"#1d5fa8",weekly:"#1a7f4b",biweekly:"#c2610a",monthly:"#6b35a3"};
 const FLABEL={daily:"Daily",weekly:"Weekly",biweekly:"Bi-Weekly",monthly:"Monthly"};
+const GOAL_STATUSES=["Not Started","In Progress","Completed"];
+const GCOL={"Not Started":"#6b7494","In Progress":"#1d5fa8","Completed":"#1a7f4b"};
 
 const today=new Date();today.setHours(0,0,0,0);
 const t0=today.toISOString().split("T")[0];
@@ -42,7 +44,7 @@ function freqLabel(r){
   return"";
 }
 
-let nextEid=7,nextTid=20,nextRid=10,nextCid=100,nextSid=100;
+let nextEid=7,nextTid=20,nextRid=10,nextCid=100,nextSid=100,nextGid=1;
 
 const EMP0=[
   {id:1,name:"Ryan",role:"admin",initials:"RY"},
@@ -120,6 +122,7 @@ export default function App(){
   const[fAs,setFAs]=useState("All");
   const[fCa,setFCa]=useState("All");
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
+  const[goals,setGoals]=useState([]);
 
   const isAdmin=user?.role==="admin";
   const canEdit=user&&(user.role==="admin"||user.role==="lead");
@@ -156,6 +159,10 @@ export default function App(){
   const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);return u;}));};
   const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);return u;}));};
   const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);return u;}));};
+
+  const addGoal=g=>setGoals(p=>[...p,{...g,id:nextGid++}]);
+  const updGoal=g=>setGoals(p=>p.map(x=>x.id===g.id?g:x));
+  const delGoal=id=>setGoals(p=>p.filter(g=>g.id!==id));
 
   const addEmp=e=>setEmps(p=>[...p,{...e,id:nextEid++,initials:mkI(e.name)}]);
   const delEmp=id=>{setEmps(p=>p.filter(e=>e.id!==id));setTasks(p=>p.map(t=>t.assignee===id?{...t,assignee:null}:t));};
@@ -212,6 +219,7 @@ export default function App(){
           <NB label="TASKS"      active={view==="list"}       onClick={()=>setView("list")}/>
           <NB label="CALENDAR"   active={view==="calendar"}   onClick={()=>setView("calendar")}/>
           {canEdit&&<NB label="↻ RECURRING" active={view==="recurring"} onClick={()=>setView("recurring")}/>}
+          <NB label="GOALS" active={view==="goals"} onClick={()=>setView("goals")}/>
           {isAdmin&&<NB label="⚙ ADMIN"     active={view==="admin"}     onClick={()=>setView("admin")}/>}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -230,6 +238,7 @@ export default function App(){
         {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal}/>}
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
+        {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp}/>}
       </div>
 
@@ -776,6 +785,55 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd}){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function GoalsPanel({emps,goals,onAdd,onUpd,onDel}){
+  const[drafts,setDrafts]=useState({});
+  const doAdd=empId=>{
+    const text=(drafts[empId]||"").trim();
+    if(!text)return;
+    onAdd({empId,text,status:"Not Started"});
+    setDrafts(d=>({...d,[empId]:""}));
+  };
+  return(
+    <div style={{maxWidth:860}}>
+      <div style={{fontSize:22,fontWeight:800,color:C.navy,marginBottom:28}}>Goals</div>
+      {emps.map(emp=>{
+        const empGoals=goals.filter(g=>g.empId===emp.id);
+        const draft=drafts[emp.id]||"";
+        return(
+          <div key={emp.id} style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:18,boxShadow:"0 1px 4px #0c123010"}}>
+            <div style={{background:C.navy,padding:"11px 20px",display:"flex",alignItems:"center",gap:12}}>
+              <Av u={emp} size={30}/>
+              <div style={{fontSize:13,fontWeight:700,color:"#fff",flex:1}}>{emp.name}</div>
+              <RP role={emp.role}/>
+              <span style={{fontSize:10,color:"#ffffff88",marginLeft:8}}>{empGoals.length} goal{empGoals.length!==1?"s":""}</span>
+            </div>
+            <div style={{padding:"14px 20px"}}>
+              {empGoals.length===0&&<div style={{fontSize:12,color:C.textMuted,fontStyle:"italic",paddingBottom:8}}>No goals yet.</div>}
+              {empGoals.map(g=>(
+                <div key={g.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <div style={{flex:1,fontSize:13,color:C.text}}>{g.text}</div>
+                  <select value={g.status} onChange={e=>onUpd({...g,status:e.target.value})}
+                    style={{background:GCOL[g.status]+"18",border:`1.5px solid ${GCOL[g.status]}66`,color:GCOL[g.status],padding:"4px 8px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    {GOAL_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <button onClick={()=>onDel(g.id)}
+                    style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"4px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer"}}>✕</button>
+                </div>
+              ))}
+              <div style={{display:"flex",gap:10,marginTop:12,alignItems:"center"}}>
+                <input value={draft} onChange={e=>setDrafts(d=>({...d,[emp.id]:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&doAdd(emp.id)}
+                  placeholder="Add a goal..." style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13}}/>
+                <button onClick={()=>doAdd(emp.id)} disabled={!draft.trim()}
+                  style={{background:draft.trim()?C.navy:C.textMuted,border:"none",color:"#fff",padding:"7px 18px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:draft.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>+ ADD</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

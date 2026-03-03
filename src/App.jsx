@@ -897,7 +897,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
   const[msgErr,setMsgErr]=useState(false);
   const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
   return(
-    <div style={{maxWidth:860}}>
+    <div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
         <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>ADMIN PANEL</div>
         <span style={{background:C.red+"18",color:C.red,border:`1px solid ${C.red}55`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>ADMIN ONLY</span>

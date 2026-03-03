@@ -130,6 +130,8 @@ export default function App(){
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
   const[loading,setLoading]=useState(true);
+  const[dbError,setDbError]=useState(null);
+  const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
     async function load(){
@@ -139,7 +141,7 @@ export default function App(){
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
       ]);
-      if(empRes.error||taskRes.error||recRes.error||goalRes.error)console.error('[backbone] load error',empRes.error,taskRes.error,recRes.error,goalRes.error);
+      [empRes,taskRes,recRes,goalRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
       const loadedRec=(recRes.data??[]).map(recFromDb);
       const loadedTasks=(taskRes.data??[]).map(taskFromDb);
@@ -183,7 +185,7 @@ export default function App(){
   const handleTaskSave=async updated=>{
     setTasks(p=>p.map(t=>t.id===updated.id?updated:t));
     setModal(updated);
-    await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id);
+    dbW('updateTask',await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id));
     if(updated.recurringId&&updated.status==="Done"){
       setRecurring(p=>p.map(r=>{
         if(r.id!==updated.recurringId)return r;
@@ -198,43 +200,44 @@ export default function App(){
   const delTask=async id=>{
     setTasks(p=>p.filter(t=>t.id!==id));
     setModal(null);
-    await supabase.from('tasks').delete().eq('id',id);
+    dbW('delTask',await supabase.from('tasks').delete().eq('id',id));
   };
 
   const crtTask=async d=>{
-    const{data,error}=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
-    if(error)console.error('[backbone] crtTask error',error);
-    if(data)setTasks(p=>[...p,taskFromDb(data)]);
+    const res=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
+    dbW('crtTask',res);
+    if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
     setNewT(null);
   };
 
-  const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({comments:u.comments}).eq('id',tid);return u;}));};
-  const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid);return u;}));};
-  const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid);return u;}));};
+  const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({comments:u.comments}).eq('id',tid).then(r=>dbW('addCom',r));return u;}));};
+  const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid).then(r=>dbW('togSub',r));return u;}));};
+  const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid).then(r=>dbW('addSub',r));return u;}));};
 
   const addGoal=async g=>{
-    const{data,error}=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
-    if(error)console.error('[backbone] addGoal error',error);
-    if(data)setGoals(p=>[...p,goalFromDb(data)]);
+    const res=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
+    dbW('addGoal',res);
+    if(res.data)setGoals(p=>[...p,goalFromDb(res.data)]);
   };
-  const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id);};
-  const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));await supabase.from('goals').delete().eq('id',id);};
+  const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));dbW('updGoal',await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id));};
+  const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));dbW('delGoal',await supabase.from('goals').delete().eq('id',id));};
 
   const addEmp=async e=>{
     const initials=mkI(e.name);
-    const{data}=await supabase.from('employees').insert({name:e.name,role:e.role,initials}).select().single();
-    if(data)setEmps(p=>[...p,data]);
+    const res=await supabase.from('employees').insert({name:e.name,role:e.role,initials}).select().single();
+    dbW('addEmp',res);
+    if(res.data)setEmps(p=>[...p,res.data]);
   };
   const delEmp=async id=>{
     setEmps(p=>p.filter(e=>e.id!==id));
     setTasks(p=>p.map(t=>t.assignee===id?{...t,assignee:null}:t));
-    await supabase.from('employees').delete().eq('id',id);
+    dbW('delEmp',await supabase.from('employees').delete().eq('id',id));
   };
   const updEmp=async e=>{
     const u={...e,initials:mkI(e.name)};
     setEmps(p=>p.map(x=>x.id===u.id?u:x));
     if(user?.id===u.id)setUser(u);
-    await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id);
+    dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id));
   };
 
   const addRecurring=async rec=>{
@@ -327,6 +330,7 @@ export default function App(){
         </div>
       </div>
       <div style={{height:3,background:`linear-gradient(90deg, ${C.red} 0%, ${C.navyLight} 60%, transparent 100%)`}}/>
+      {dbError&&<div style={{background:"#fff0f0",borderBottom:`2px solid ${C.red}`,padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:C.red,fontWeight:700}}>⚠ DATABASE ERROR: {dbError}<button onClick={()=>setDbError(null)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontWeight:700,marginLeft:16}}>✕</button></div>}
 
       <div style={{padding:28}}>
         {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal}/>}

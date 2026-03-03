@@ -918,9 +918,9 @@ function CalView({tasks,month,setMonth,onOpen}){
           const isT=day===today.getDate()&&yr===today.getFullYear()&&mo===today.getMonth();
           const dt=day?(byDay[day]||[]):[];
           return<div key={i} style={{background:C.surface,minHeight:90,padding:6,border:isT?`2px solid ${C.red}`:`1px solid ${C.border}`}}>
-            {day&&<div style={{fontSize:12,color:isT?C.red:C.textMuted,marginBottom:4,fontWeight:isT?800:400}}>{day}</div>}
-            {dt.slice(0,3).map(t=><div key={t.id} onClick={()=>onOpen(t)} style={{fontSize:10,color:"#fff",background:t.recurringId?C.purple:PCOL[t.priority],padding:"2px 5px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",fontWeight:600}}>{t.recurringId?"↻ ":""}{t.title}</div>)}
-            {dt.length>3&&<div style={{fontSize:10,color:C.textMuted}}>+{dt.length-3} more</div>}
+            {day&&<div style={{fontSize:13,color:isT?C.red:C.textMuted,marginBottom:4,fontWeight:isT?800:400}}>{day}</div>}
+            {dt.slice(0,3).map(t=><div key={t.id} onClick={()=>onOpen(t)} style={{fontSize:11,color:"#fff",background:t.recurringId?C.purple:PCOL[t.priority],padding:"2px 5px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",fontWeight:600}}>{t.recurringId?"↻ ":""}{t.title}</div>)}
+            {dt.length>3&&<div style={{fontSize:11,color:C.textMuted}}>+{dt.length-3} more</div>}
           </div>;
         })}
       </div>

@@ -121,7 +121,7 @@ export default function App(){
   const[emps,setEmps]=useState([]);
   const[tasks,setTasks]=useState([]);
   const[recurring,setRecurring]=useState([]);
-  const[view,setView]=useState("tasks");
+  const[view,setView]=useState("list");
   const[modal,setModal]=useState(null);
   const[newT,setNewT]=useState(null);
   const[fSt,setFSt]=useState("All");
@@ -404,7 +404,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:9}}>
             <Av u={user} size={32}/>
             <div><div style={{fontSize:12,color:"#fff",fontWeight:700}}>{user.name}</div><div style={{fontSize:9,color:"#ffffff77",textTransform:"uppercase",letterSpacing:1}}>{user.role}</div></div>
-            <button onClick={()=>{setUser(null);setView("tasks");setFAs("All");setFSt("All");setFPr("All");setFCa("All");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
+            <button onClick={()=>{setUser(null);setView("list");setFAs("All");setFSt("All");setFPr("All");setFCa("All");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
           </div>
         </div>
       </div>

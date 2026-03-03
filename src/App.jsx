@@ -464,9 +464,9 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
 
   return(
     <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Recurring Tasks</div>
+          <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>RECURRING TASKS</div>
           <span style={{background:C.purple+"18",color:C.purple,border:`1px solid ${C.purple}44`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>AUTO-GENERATES</span>
         </div>
         {canEdit&&<button onClick={startAdd} style={{background:C.red,color:"#fff",border:"none",padding:"9px 22px",fontFamily:"inherit",fontWeight:700,cursor:"pointer",fontSize:12,letterSpacing:1}}>+ NEW RECURRING TASK</button>}
@@ -758,8 +758,8 @@ function CalView({tasks,month,setMonth,onOpen}){
   tasks.forEach(t=>{if(!t.dueDate)return;const d=new Date(t.dueDate);if(d.getFullYear()===yr&&d.getMonth()===mo){if(!byDay[d.getDate()])byDay[d.getDate()]=[];byDay[d.getDate()].push(t);}});
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Calendar</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>CALENDAR</div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>setMonth(new Date(yr,mo-1,1))} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 16px",fontFamily:"inherit",cursor:"pointer",fontWeight:700}}>←</button>
           <div style={{fontSize:14,color:C.navy,fontWeight:800,minWidth:150,textAlign:"center"}}>{month.toLocaleDateString("en-US",{month:"long",year:"numeric"}).toUpperCase()}</div>
@@ -898,8 +898,8 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
   const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
   return(
     <div style={{maxWidth:860}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Admin Panel</div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>ADMIN PANEL</div>
         <span style={{background:C.red+"18",color:C.red,border:`1px solid ${C.red}55`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>ADMIN ONLY</span>
       </div>
       <div style={{display:"flex",gap:14,marginBottom:32}}>

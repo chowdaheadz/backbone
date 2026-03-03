@@ -190,7 +190,7 @@ export default function App(){
 
   const handleTaskSave=async updated=>{
     setTasks(p=>p.map(t=>t.id===updated.id?updated:t));
-    setModal(updated);
+    setModal(m=>m&&m.id===updated.id?updated:m);
     dbW('updateTask',await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id));
     if(updated.recurringId&&updated.status==="Done"){
       setRecurring(p=>p.map(r=>{
@@ -356,7 +356,7 @@ export default function App(){
 
       <div style={{padding:28}}>
         {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal}/>}
-        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal}/>}
+        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave}/>}
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
@@ -677,7 +677,7 @@ function Dash({tasks,stats,emps,recurring,onOpen}){
 }
 
 // ── List View ─────────────────────────────────────────────────────────────────
-function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen}){
+function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen,onUpdate}){
   return(
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -708,9 +708,20 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
               </div>
               <div style={{fontSize:12,color:C.textMuted,display:"flex",alignItems:"center"}}>{task.category}</div>
               <div style={{display:"flex",alignItems:"center",gap:7}}>{emp?<><Av u={emp} size={24}/><span style={{fontSize:12,fontWeight:500}}>{emp.name}</span></>:<span style={{fontSize:12,color:C.textMuted}}>Unassigned</span>}</div>
-              <div style={{fontSize:12,color:od?C.red:C.textMuted,display:"flex",alignItems:"center",fontWeight:od?700:400}}>{fmtS(task.dueDate)}{od?" ⚠":""}</div>
-              <div style={{display:"flex",alignItems:"center"}}><SB status={task.status}/></div>
-              <div style={{display:"flex",alignItems:"center"}}><PB priority={task.priority}/></div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                <input type="date" value={task.dueDate||""} onChange={e=>onUpdate({...task,dueDate:e.target.value})}
+                  style={{background:"transparent",border:"none",color:od?C.red:C.textMuted,fontSize:12,fontFamily:"inherit",fontWeight:od?700:400,cursor:"pointer",padding:0,width:"100%",colorScheme:"dark"}}/>
+              </div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                {(()=>{const sc=SCOL[task.status];return<select value={task.status} onChange={e=>onUpdate({...task,status:e.target.value})}
+                  style={{background:sc+"18",color:sc,border:`1px solid ${sc}66`,padding:"2px 6px",fontSize:10,letterSpacing:1,fontWeight:700,fontFamily:"inherit",cursor:"pointer",appearance:"none",WebkitAppearance:"none",textTransform:"uppercase",outline:"none"}}>
+                  {STATUSES.map(s=><option key={s} value={s}>{s.toUpperCase()}</option>)}</select>;})()}
+              </div>
+              <div style={{display:"flex",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                {(()=>{const pc=PCOL[task.priority];return<select value={task.priority} onChange={e=>onUpdate({...task,priority:e.target.value})}
+                  style={{background:pc+"18",color:pc,border:`1px solid ${pc}66`,padding:"2px 6px",fontSize:10,letterSpacing:1,fontWeight:700,fontFamily:"inherit",cursor:"pointer",appearance:"none",WebkitAppearance:"none",textTransform:"uppercase",outline:"none"}}>
+                  {PRIORITIES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>;})()}
+              </div>
             </div>
           );
         })}

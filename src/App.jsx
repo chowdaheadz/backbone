@@ -662,8 +662,8 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
   const activeRec=recurring.filter(r=>r.active).length;
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>Dashboard</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>DASHBOARD</div>
         <div style={{fontSize:12,color:C.textMuted}}>{fmt(t0)}</div>
       </div>
       {dashMsg&&<div style={{background:C.navy,padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${C.red}`}}>
@@ -700,8 +700,8 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
 function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen,onUpdate}){
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div style={{fontSize:22,fontWeight:800,color:C.navy}}>All Tasks</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>TASKS</div>
         <div style={{fontSize:12,color:C.textMuted}}>{tasks.length} task{tasks.length!==1?"s":""}</div>
       </div>
       <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
@@ -1007,7 +1007,7 @@ function GoalsPanel({emps,goals,onAdd,onUpd,onDel}){
   };
   return(
     <div style={{width:"100%"}}>
-      <div style={{fontSize:22,fontWeight:800,color:C.navy,marginBottom:28}}>Goals</div>
+      <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:16}}>GOALS</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       {emps.map(emp=>{
         const empGoals=goals.filter(g=>g.empId===emp.id);

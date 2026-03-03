@@ -901,7 +901,7 @@ function CalView({tasks,month,setMonth,onOpen}){
   const yr=month.getFullYear(),mo=month.getMonth();
   const cells=[...Array(new Date(yr,mo,1).getDay()).fill(null),...Array.from({length:new Date(yr,mo+1,0).getDate()},(_,i)=>i+1)];
   const byDay={};
-  tasks.forEach(t=>{if(!t.dueDate)return;const d=new Date(t.dueDate);if(d.getFullYear()===yr&&d.getMonth()===mo){if(!byDay[d.getDate()])byDay[d.getDate()]=[];byDay[d.getDate()].push(t);}});
+  tasks.forEach(t=>{if(!t.dueDate)return;const[dy,dm,dd]=t.dueDate.split('-').map(Number);if(dy===yr&&dm-1===mo){if(!byDay[dd])byDay[dd]=[];byDay[dd].push(t);}});
   return(
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>

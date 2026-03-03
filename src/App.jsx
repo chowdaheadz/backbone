@@ -375,7 +375,7 @@ function SkuPanel({counters,onInc,onDec}){
   return(
     <div>
       <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:20}}>SKU COUNTERS</div>
-      <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:480}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
         {counters.map(c=>(
           <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 6px #0c123012"}}>
             <div>

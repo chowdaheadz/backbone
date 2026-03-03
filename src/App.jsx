@@ -249,7 +249,7 @@ export default function App(){
 
   const addEmp=async e=>{
     const initials=mkI(e.name);
-    const res=await supabase.from('employees').insert({name:e.name,role:e.role,initials}).select().single();
+    const res=await supabase.from('employees').insert({name:e.name,role:e.role,initials,pin:e.pin||null}).select().single();
     dbW('addEmp',res);
     if(res.data)setEmps(p=>[...p,res.data]);
   };
@@ -262,7 +262,7 @@ export default function App(){
     const u={...e,initials:mkI(e.name)};
     setEmps(p=>p.map(x=>x.id===u.id?u:x));
     if(user?.id===u.id)setUser(u);
-    dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials}).eq('id',u.id));
+    dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials,pin:u.pin||null}).eq('id',u.id));
   };
   const addMsg=async text=>{
     const res=await supabase.from('messages').insert({text}).select().single();
@@ -336,7 +336,7 @@ export default function App(){
   };
 
   if(loading)return<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.navy,fontSize:18,fontWeight:700,letterSpacing:2}}>LOADING…</div>;
-  if(!user)return<Login emps={emps} onLogin={setUser}/>;
+  if(!user)return<Login emps={emps} onLogin={e=>{setUser(e);setFAs(String(e.id));}}/>;
   const blank={title:"",category:"General",priority:"Medium",status:"To Do",assignee:user.id,dueDate:addDays(today,7),description:"",subtasks:[],createdBy:user.id};
 
   return(
@@ -362,7 +362,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:9}}>
             <Av u={user} size={32}/>
             <div><div style={{fontSize:12,color:"#fff",fontWeight:700}}>{user.name}</div><div style={{fontSize:9,color:"#ffffff77",textTransform:"uppercase",letterSpacing:1}}>{user.role}</div></div>
-            <button onClick={()=>{setUser(null);setView("dashboard");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
+            <button onClick={()=>{setUser(null);setView("dashboard");setFAs("All");setFSt("All");setFPr("All");setFCa("All");}} style={{background:"none",border:"1px solid #ffffff33",color:"#ffffffaa",padding:"4px 10px",fontFamily:"inherit",cursor:"pointer",fontSize:11,marginLeft:4}}>↩</button>
           </div>
         </div>
       </div>
@@ -414,28 +414,83 @@ function SkuPanel({counters,onInc,onDec}){
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 function Login({emps,onLogin}){
-  return(
-    <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
-        <div style={{width:6,height:64,background:C.red}}/>
-        <div>
-          <div style={{fontSize:48,fontWeight:900,color:"#fff",letterSpacing:6,lineHeight:1}}>BACKBONE</div>
-          <div style={{fontSize:11,color:"#ffffff44",letterSpacing:4,marginTop:5}}>BY CHOWDAHEADZ</div>
+  const[sel,setSel]=useState(null);
+  const[pin,setPin]=useState("");
+  const[err,setErr]=useState(false);
+
+  const tapDigit=d=>{
+    if(pin.length>=4)return;
+    const next=pin+d;
+    setPin(next);
+    setErr(false);
+    if(next.length===4)setTimeout(()=>submit(next),120);
+  };
+  const tapBack=()=>{setPin(p=>p.slice(0,-1));setErr(false);};
+  const submit=(p=pin)=>{
+    if(!sel.pin){onLogin(sel);return;}
+    if(p===sel.pin){onLogin(sel);}
+    else{setErr(true);setPin("");}
+  };
+  const goBack=()=>{setSel(null);setPin("");setErr(false);};
+
+  const Logo=()=>(
+    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:8}}>
+      <div style={{width:6,height:64,background:C.red}}/>
+      <div>
+        <div style={{fontSize:48,fontWeight:900,color:"#fff",letterSpacing:6,lineHeight:1}}>BACKBONE</div>
+        <div style={{fontSize:11,color:"#ffffff44",letterSpacing:4,marginTop:5}}>BY CHOWDAHEADZ</div>
+      </div>
+    </div>
+  );
+
+  if(!sel){
+    return(
+      <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+        <Logo/>
+        <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:370,marginTop:44}}>
+          <div style={{color:"#ffffff55",marginBottom:20,fontSize:12,letterSpacing:3,fontWeight:700}}>SELECT YOUR PROFILE</div>
+          {emps.map(e=>(
+            <button key={e.id} onClick={()=>setSel(e)}
+              style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:"#ffffff09",border:"1px solid #ffffff14",padding:"13px 16px",marginBottom:8,cursor:"pointer",fontFamily:"inherit",color:"#fff",textAlign:"left"}}
+              onMouseEnter={x=>x.currentTarget.style.background="#ffffff18"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff09"}>
+              <Av u={e} size={38}/>
+              <div>
+                <div style={{fontSize:14,fontWeight:700}}>{e.name}</div>
+                <div style={{fontSize:10,color:e.role==="admin"?"#ff8888":e.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{e.role}</div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
-      <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:370,marginTop:44}}>
-        <div style={{color:"#ffffff55",marginBottom:20,fontSize:12,letterSpacing:3,fontWeight:700}}>SELECT YOUR PROFILE</div>
-        {emps.map(e=>(
-          <button key={e.id} onClick={()=>onLogin(e)}
-            style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:"#ffffff09",border:"1px solid #ffffff14",padding:"13px 16px",marginBottom:8,cursor:"pointer",fontFamily:"inherit",color:"#fff",textAlign:"left"}}
-            onMouseEnter={x=>x.currentTarget.style.background="#ffffff18"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff09"}>
-            <Av u={e} size={38}/>
-            <div>
-              <div style={{fontSize:14,fontWeight:700}}>{e.name}</div>
-              <div style={{fontSize:10,color:e.role==="admin"?"#ff8888":e.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:1,marginTop:2}}>{e.role}</div>
-            </div>
-          </button>
-        ))}
+    );
+  }
+
+  const btnStyle={background:"#ffffff14",border:"1px solid #ffffff22",color:"#fff",fontFamily:"inherit",fontSize:22,fontWeight:700,cursor:"pointer",padding:"18px 0",borderRadius:0,letterSpacing:1};
+  return(
+    <div style={{minHeight:"100vh",background:C.navy,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+      <Logo/>
+      <div style={{background:"#ffffff0d",border:"1px solid #ffffff18",padding:32,width:320,marginTop:44,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
+        <Av u={sel} size={56}/>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>{sel.name}</div>
+          <div style={{fontSize:10,color:sel.role==="admin"?"#ff8888":sel.role==="lead"?"#ffb86c":"#88aaff",textTransform:"uppercase",letterSpacing:2,marginTop:4}}>{sel.role}</div>
+        </div>
+        <div style={{fontSize:11,color:"#ffffff55",letterSpacing:3,fontWeight:700}}>ENTER YOUR PIN</div>
+        <div style={{display:"flex",gap:14}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{width:16,height:16,borderRadius:"50%",background:i<pin.length?"#fff":"transparent",border:"2px solid #ffffff66",transition:"background 0.1s"}}/>
+          ))}
+        </div>
+        {err&&<div style={{fontSize:12,color:C.red,fontWeight:700,letterSpacing:1}}>INCORRECT PIN — TRY AGAIN</div>}
+        {!sel.pin&&<div style={{fontSize:11,color:"#ffb86c",fontWeight:700,letterSpacing:1,textAlign:"center"}}>NO PIN SET — CONTACT ADMIN</div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%"}}>
+          {[1,2,3,4,5,6,7,8,9].map(d=>(
+            <button key={d} onClick={()=>tapDigit(String(d))} style={{...btnStyle}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>{d}</button>
+          ))}
+          <button onClick={goBack} style={{...btnStyle,fontSize:11,letterSpacing:2,color:"#ffffff88"}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>← BACK</button>
+          <button onClick={()=>tapDigit("0")} style={{...btnStyle}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>0</button>
+          <button onClick={tapBack} style={{...btnStyle,fontSize:18}} onMouseEnter={x=>x.currentTarget.style.background="#ffffff22"} onMouseLeave={x=>x.currentTarget.style.background="#ffffff14"}>⌫</button>
+        </div>
       </div>
     </div>
   );
@@ -891,11 +946,12 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
 function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}){
-  const[name,setName]=useState("");const[role,setRole]=useState("employee");
+  const[name,setName]=useState("");const[role,setRole]=useState("employee");const[addPin,setAddPin]=useState("");
   const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
   const[newMsg,setNewMsg]=useState("");
   const[msgErr,setMsgErr]=useState(false);
-  const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
+  const pinValid=p=>!p||/^\d{4}$/.test(p);
+  const doAdd=()=>{if(!name.trim()||!pinValid(addPin))return;onAdd({name:name.trim(),role,pin:addPin||null});setName("");setRole("employee");setAddPin("");};
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
@@ -912,12 +968,19 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
         <div style={{padding:"18px 20px",display:"flex",gap:12,alignItems:"flex-end"}}>
           <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>FULL NAME</div><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="e.g. Jamie Lee" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box"}}/></div>
           <div style={{width:160}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>ROLE</div><select value={role} onChange={e=>setRole(e.target.value)} style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13}}>{ROLES.map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}</select></div>
-          <button onClick={doAdd} disabled={!name.trim()} style={{background:name.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 24px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:name.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD EMPLOYEE</button>
+          <div style={{width:120}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>PIN (4 digits)</div><input value={addPin} onChange={e=>setAddPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="e.g. 1234" maxLength={4} style={{width:"100%",background:C.card,border:`1.5px solid ${addPin&&!pinValid(addPin)?C.red:C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box",letterSpacing:4,textAlign:"center"}}/></div>
+          <button onClick={doAdd} disabled={!name.trim()||!pinValid(addPin)} style={{background:name.trim()&&pinValid(addPin)?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 24px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:name.trim()&&pinValid(addPin)?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD EMPLOYEE</button>
         </div>
       </div>
+      {emps.length>0&&emps[0].pin===undefined&&(
+        <div style={{padding:"12px 20px",background:"#fffbf0",border:`1px solid ${C.orange}55`,borderLeft:`4px solid ${C.orange}`,marginBottom:16,fontSize:12,color:C.text}}>
+          <strong style={{color:C.orange}}>PIN column not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor to enable PINs:
+          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS pin varchar(4);"}</pre>
+        </div>
+      )}
       <div style={{background:C.surface,border:`1px solid ${C.border}`,boxShadow:"0 1px 6px #0c123012"}}>
-        <div style={{background:C.navy,padding:"11px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 100px 120px",gap:12,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
-          <div/><div>NAME</div><div>ROLE</div><div>OPEN TASKS</div><div style={{textAlign:"right"}}>ACTIONS</div>
+        <div style={{background:C.navy,padding:"11px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 80px 100px 120px",gap:12,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
+          <div/><div>NAME</div><div>ROLE</div><div>PIN</div><div>OPEN TASKS</div><div style={{textAlign:"right"}}>ACTIONS</div>
         </div>
         {emps.map(emp=>{
           const open=tasks.filter(t=>t.assignee===emp.id&&t.status!=="Done").length;
@@ -930,6 +993,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
                     <Av u={{initials:mkI(draft.name||" ")}} size={38}/>
                     <div style={{flex:1}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>NAME</div><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} style={{width:"100%",background:C.surface,border:`1.5px solid ${C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
                     <div style={{width:160}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>ROLE</div><select value={draft.role} onChange={e=>setDraft({...draft,role:e.target.value})} style={{width:"100%",background:C.surface,border:`1.5px solid ${C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13}}>{ROLES.map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}</select></div>
+                    <div style={{width:110}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700}}>PIN (4 digits)</div><input value={draft.pin||""} onChange={e=>setDraft({...draft,pin:e.target.value.replace(/\D/g,"").slice(0,4)||null})} placeholder="set pin" maxLength={4} style={{width:"100%",background:C.surface,border:`1.5px solid ${draft.pin&&draft.pin.length!==4?C.red:C.navy}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box",letterSpacing:4,textAlign:"center"}}/></div>
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>{onUpd(draft);setEditId(null);}} style={{background:C.green,border:"none",color:"#fff",padding:"8px 18px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>SAVE</button>
                       <button onClick={()=>setEditId(null)} style={{background:"none",border:`1.5px solid ${C.border}`,color:C.textMuted,padding:"8px 14px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>CANCEL</button>
@@ -937,10 +1001,11 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
                   </div>
                 </div>
               ):(
-                <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 100px 120px",gap:12,alignItems:"center"}}
+                <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"52px 1fr 130px 80px 100px 120px",gap:12,alignItems:"center"}}
                   onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <Av u={emp} size={38}/><div><div style={{fontSize:14,fontWeight:700}}>{emp.name}{isSelf&&<span style={{fontSize:10,color:C.textMuted,marginLeft:8,fontWeight:400}}>(you)</span>}</div></div>
                   <div><RP role={emp.role}/></div>
+                  <div style={{fontSize:12,color:emp.pin?C.text:C.textMuted,letterSpacing:emp.pin?3:0,fontWeight:emp.pin?700:400}}>{emp.pin?"••••":"—"}</div>
                   <div style={{fontSize:13,color:open>3?C.red:C.textMuted,fontWeight:open>0?700:400}}>{open} open</div>
                   <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
                     <button onClick={()=>{setEditId(emp.id);setDraft({...emp});}} style={{background:"none",border:`1px solid ${C.navy}`,color:C.navy,padding:"5px 13px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>EDIT</button>

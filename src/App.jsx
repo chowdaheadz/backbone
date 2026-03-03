@@ -648,7 +648,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
           return(
             <div key={r.id} style={{borderBottom:`1px solid ${C.border}`,opacity:r.active?1:0.65}}
               onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"2.2fr 1.2fr 1fr 110px 110px 160px",gap:12,alignItems:"center"}}>
+              <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"2.2fr 1.2fr 1fr 110px 110px 210px",gap:12,alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:C.text,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{width:10,height:10,borderRadius:"50%",background:FCOL[r.frequency],flexShrink:0,display:"inline-block"}}/>
@@ -675,7 +675,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
                     :<span style={{background:"#eee",color:C.textMuted,border:`1px solid ${C.border}`,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>⏸ PAUSED</span>
                   }
                 </div>
-                <div style={{display:"flex",gap:5,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:5,justifyContent:"flex-end",flexWrap:"nowrap"}}>
                   {canEdit&&r.active&&<button onClick={()=>onRunNow(r.id)} title="Generate an instance right now" style={{background:"none",border:`1px solid ${C.purple}`,color:C.purple,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>↻ NOW</button>}
                   {canEdit&&<button onClick={()=>startEdit(r)} style={{background:"none",border:`1px solid ${C.navy}`,color:C.navy,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>EDIT</button>}
                   {canEdit&&<button onClick={()=>onToggle(r.id)} style={{background:"none",border:`1px solid ${r.active?C.orange:C.green}`,color:r.active?C.orange:C.green,padding:"4px 9px",fontFamily:"inherit",fontSize:10,cursor:"pointer",fontWeight:700}}>{r.active?"PAUSE":"RESUME"}</button>}

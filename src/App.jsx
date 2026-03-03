@@ -113,6 +113,7 @@ function SC({label,value,color,sub}){return<div style={{background:C.surface,bor
 const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
+const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{A:r.check_a,B:r.check_b,C:r.check_c,D:r.check_d}});
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App(){
@@ -130,6 +131,8 @@ export default function App(){
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
   const[skuCounters,setSkuCounters]=useState([]);
+  const[launches,setLaunches]=useState([]);
+  const[launchReady,setLaunchReady]=useState(false);
   const[messages,setMessages]=useState([]);
   const[dashMsg,setDashMsg]=useState(null);
   const[loading,setLoading]=useState(true);
@@ -138,13 +141,14 @@ export default function App(){
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
         supabase.from('sku_counters').select('*').order('id'),
         supabase.from('messages').select('*').order('id'),
+        supabase.from('product_launches').select('*').order('id'),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -170,6 +174,7 @@ export default function App(){
       skuData.filter(c=>c.value===1500&&(skuRes.data??[]).find(o=>o.id===c.id)?.value===0)
         .forEach(c=>supabase.from('sku_counters').update({value:1500}).eq('id',c.id));
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
+      if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
       setLoading(false);
     }
     load();
@@ -245,6 +250,24 @@ export default function App(){
     const newVal=counter.value-1;
     setSkuCounters(p=>p.map(c=>c.id===id?{...c,value:newVal}:c));
     dbW('decSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
+  };
+
+  const addLaunch=async l=>{
+    const res=await supabase.from('product_launches').insert({name:l.name,sku:l.sku,check_a:false,check_b:false,check_c:false,check_d:false}).select().single();
+    dbW('addLaunch',res);
+    if(res.data)setLaunches(p=>[...p,launchFromDb(res.data)]);
+  };
+  const delLaunch=async id=>{
+    setLaunches(p=>p.filter(l=>l.id!==id));
+    dbW('delLaunch',await supabase.from('product_launches').delete().eq('id',id));
+  };
+  const togLaunch=async(id,k)=>{
+    const col={A:'check_a',B:'check_b',C:'check_c',D:'check_d'}[k];
+    const launch=launches.find(l=>l.id===id);
+    if(!launch)return;
+    const newVal=!launch.checks[k];
+    setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:newVal}}:l));
+    dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
   };
 
   const hasPinCol=()=>emps.length>0&&'pin' in emps[0];
@@ -378,7 +401,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel/></div>}
+        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg}/>}
       </div>
 
@@ -421,20 +444,25 @@ function SkuPanel({counters,onInc,onDec}){
 
 // ── Product Launch Panel ───────────────────────────────────────────────────────
 const LAUNCH_CHECKS=["A","B","C","D"];
-function ProductLaunchPanel(){
-  const[launches,setLaunches]=useState([]);
+function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
   const add=()=>{
     if(!name.trim()||!sku.trim())return;
-    setLaunches(p=>[...p,{id:Date.now(),name:name.trim(),sku:sku.trim(),checks:{A:false,B:false,C:false,D:false}}]);
+    onAdd({name:name.trim(),sku:sku.trim()});
     setName("");setSku("");
   };
-  const toggle=(id,k)=>setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:!l.checks[k]}}:l));
-  const remove=id=>setLaunches(p=>p.filter(l=>l.id!==id));
+  const toggle=onToggle;
+  const remove=onRemove;
   return(
     <div>
       <div style={{background:C.navy,padding:"10px 16px",fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>PRODUCT LAUNCH</div>
+      {!ready&&(
+        <div style={{padding:"12px 14px",background:"#fffbf0",border:`1px solid ${C.orange}55`,borderTop:"none",borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text}}>
+          <strong style={{color:C.orange}}>Table not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor:
+          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"create table public.product_launches (\n  id bigint generated always as identity primary key,\n  name text not null,\n  sku text not null,\n  check_a boolean default false,\n  check_b boolean default false,\n  check_c boolean default false,\n  check_d boolean default false,\n  created_at timestamptz default now()\n);\nalter table public.product_launches enable row level security;\ncreate policy \"Allow all\" on public.product_launches for all using (true) with check (true);"}</pre>
+        </div>
+      )}
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-end"}}>
         <div style={{flex:1}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT NAME</div><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. Classic Hoodie" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
         <div style={{width:150}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT SKU</div><input value={sku} onChange={e=>setSku(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. HDIE-001" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>

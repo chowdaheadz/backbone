@@ -378,7 +378,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/>}
+        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg}/>}
       </div>
 
@@ -390,27 +390,87 @@ export default function App(){
 
 // ── SKU Panel ─────────────────────────────────────────────────────────────────
 function SkuPanel({counters,onInc,onDec}){
+  const[open,setOpen]=useState(true);
+  return(
+    <div style={{marginBottom:24}}>
+      <div style={{background:C.navy,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>SKU COUNTERS</div>
+        <span style={{color:"#ffffff88",fontSize:12,fontWeight:700}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"10px 0 0"}}>
+          {counters.map(c=>(
+            <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 4px #0c123010"}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <div style={{fontSize:26,fontWeight:900,color:C.navy,minWidth:54,textAlign:"right"}}>{c.value}</div>
+                <button onClick={()=>onDec(c.id)} style={{width:30,height:30,background:C.textMuted,color:"#fff",border:"none",fontSize:20,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                  onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
+                  onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>
+                <button onClick={()=>onInc(c.id)} style={{width:30,height:30,background:C.navy,color:"#fff",border:"none",fontSize:16,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                  onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
+                  onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Product Launch Panel ───────────────────────────────────────────────────────
+const LAUNCH_CHECKS=["A","B","C","D"];
+function ProductLaunchPanel(){
+  const[launches,setLaunches]=useState([]);
+  const[name,setName]=useState("");
+  const[sku,setSku]=useState("");
+  const add=()=>{
+    if(!name.trim()||!sku.trim())return;
+    setLaunches(p=>[...p,{id:Date.now(),name:name.trim(),sku:sku.trim(),checks:{A:false,B:false,C:false,D:false}}]);
+    setName("");setSku("");
+  };
+  const toggle=(id,k)=>setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:!l.checks[k]}}:l));
+  const remove=id=>setLaunches(p=>p.filter(l=>l.id!==id));
   return(
     <div>
-      <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:20}}>SKU COUNTERS</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-        {counters.map(c=>(
-          <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 6px #0c123012"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value}</div>
-              <button onClick={()=>onDec(c.id)} style={{width:44,height:44,background:C.textMuted,color:"#fff",border:"none",fontSize:28,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
-                onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>
-              <button onClick={()=>onInc(c.id)} style={{width:44,height:44,background:C.navy,color:"#fff",border:"none",fontSize:24,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
-                onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>
-            </div>
-          </div>
-        ))}
+      <div style={{background:C.navy,padding:"10px 16px",fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>PRODUCT LAUNCH</div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-end"}}>
+        <div style={{flex:1}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT NAME</div><input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. Classic Hoodie" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <div style={{width:150}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT SKU</div><input value={sku} onChange={e=>setSku(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. HDIE-001" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <button onClick={add} disabled={!name.trim()||!sku.trim()} style={{background:name.trim()&&sku.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"7px 20px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:name.trim()&&sku.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap",height:34}}>+ ADD</button>
       </div>
+      {launches.length===0?(
+        <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
+      ):(
+        <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
+          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
+            <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/>
+          </div>
+          {launches.map(l=>{
+            const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
+            const allDone=done===LAUNCH_CHECKS.length;
+            return(
+              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
+                onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
+                  <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
+                </div>
+                <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
+                {LAUNCH_CHECKS.map(k=>(
+                  <div key={k} style={{display:"flex",justifyContent:"center"}}>
+                    <input type="checkbox" checked={l.checks[k]} onChange={()=>toggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
+                  </div>
+                ))}
+                <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
+                  onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
+                  onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

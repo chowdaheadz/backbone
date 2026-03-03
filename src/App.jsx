@@ -247,9 +247,11 @@ export default function App(){
     dbW('decSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
   };
 
+  const hasPinCol=()=>emps.length>0&&'pin' in emps[0];
   const addEmp=async e=>{
     const initials=mkI(e.name);
-    const res=await supabase.from('employees').insert({name:e.name,role:e.role,initials,pin:e.pin||null}).select().single();
+    const payload={name:e.name,role:e.role,initials,...(hasPinCol()&&{pin:e.pin||null})};
+    const res=await supabase.from('employees').insert(payload).select().single();
     dbW('addEmp',res);
     if(res.data)setEmps(p=>[...p,res.data]);
   };
@@ -262,7 +264,8 @@ export default function App(){
     const u={...e,initials:mkI(e.name)};
     setEmps(p=>p.map(x=>x.id===u.id?u:x));
     if(user?.id===u.id)setUser(u);
-    dbW('updEmp',await supabase.from('employees').update({name:u.name,role:u.role,initials:u.initials,pin:u.pin||null}).eq('id',u.id));
+    const payload={name:u.name,role:u.role,initials:u.initials,...(hasPinCol()&&{pin:u.pin||null})};
+    dbW('updEmp',await supabase.from('employees').update(payload).eq('id',u.id));
   };
   const addMsg=async text=>{
     const res=await supabase.from('messages').insert({text}).select().single();

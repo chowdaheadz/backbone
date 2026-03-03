@@ -414,7 +414,7 @@ export default function App(){
       <div style={{padding:28}}>
         {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg} categories={categories}/>}
         {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave} categories={categories}/>}
-        {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
+        {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
@@ -913,20 +913,40 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
-function CalView({tasks,month,setMonth,onOpen}){
+function CalView({tasks,month,setMonth,onOpen,categories}){
   const yr=month.getFullYear(),mo=month.getMonth();
+  const[selCats,setSelCats]=useState(new Set());
+  const toggleCat=cat=>setSelCats(prev=>{const s=new Set(prev);s.has(cat)?s.delete(cat):s.add(cat);return s;});
+  const allSelected=selCats.size===0;
+  const visibleTasks=allSelected?tasks:tasks.filter(t=>selCats.has(t.category));
   const cells=[...Array(new Date(yr,mo,1).getDay()).fill(null),...Array.from({length:new Date(yr,mo+1,0).getDate()},(_,i)=>i+1)];
   const byDay={};
-  tasks.forEach(t=>{if(!t.dueDate)return;const[dy,dm,dd]=t.dueDate.split('-').map(Number);if(dy===yr&&dm-1===mo){if(!byDay[dd])byDay[dd]=[];byDay[dd].push(t);}});
+  visibleTasks.forEach(t=>{if(!t.dueDate)return;const[dy,dm,dd]=t.dueDate.split('-').map(Number);if(dy===yr&&dm-1===mo){if(!byDay[dd])byDay[dd]=[];byDay[dd].push(t);}});
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>CALENDAR</div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>setMonth(new Date(yr,mo-1,1))} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 16px",fontFamily:"inherit",cursor:"pointer",fontWeight:700}}>←</button>
           <div style={{fontSize:14,color:C.navy,fontWeight:800,minWidth:150,textAlign:"center"}}>{month.toLocaleDateString("en-US",{month:"long",year:"numeric"}).toUpperCase()}</div>
           <button onClick={()=>setMonth(new Date(yr,mo+1,1))} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 16px",fontFamily:"inherit",cursor:"pointer",fontWeight:700}}>→</button>
         </div>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12,padding:"10px 12px",background:C.surface,border:`1px solid ${C.border}`}}>
+        <span style={{fontSize:10,color:C.textMuted,fontWeight:700,letterSpacing:1,alignSelf:"center",marginRight:4}}>FILTER:</span>
+        <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,fontWeight:700,color:allSelected?C.navy:C.textMuted,background:allSelected?C.navy+"18":"none",border:`1px solid ${allSelected?C.navy:C.border}`,padding:"3px 10px"}}>
+          <input type="checkbox" checked={allSelected} onChange={()=>setSelCats(new Set())} style={{accentColor:C.navy,cursor:"pointer"}}/>
+          ALL
+        </label>
+        {categories.map(cat=>{
+          const active=selCats.has(cat);
+          return(
+            <label key={cat} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,fontWeight:700,color:active?C.navy:C.textMuted,background:active?C.navy+"18":"none",border:`1px solid ${active?C.navy:C.border}`,padding:"3px 10px"}}>
+              <input type="checkbox" checked={active} onChange={()=>toggleCat(cat)} style={{accentColor:C.navy,cursor:"pointer"}}/>
+              {cat}
+            </label>
+          );
+        })}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
         {["SUN","MON","TUE","WED","THU","FRI","SAT"].map(d=><div key={d} style={{background:C.navy,color:"#fff",padding:8,textAlign:"center",fontSize:11,letterSpacing:1,fontWeight:700}}>{d}</div>)}

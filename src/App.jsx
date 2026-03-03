@@ -266,12 +266,14 @@ export default function App(){
   };
   const addMsg=async text=>{
     const res=await supabase.from('messages').insert({text}).select().single();
-    dbW('addMsg',res);
+    if(res.error){console.error('[backbone] addMsg',res.error);return false;}
     if(res.data)setMessages(p=>[...p,res.data]);
+    return true;
   };
   const delMsg=async id=>{
     setMessages(p=>p.filter(m=>m.id!==id));
-    dbW('delMsg',await supabase.from('messages').delete().eq('id',id));
+    const res=await supabase.from('messages').delete().eq('id',id);
+    if(res.error)console.error('[backbone] delMsg',res.error);
   };
 
   const addRecurring=async rec=>{
@@ -892,6 +894,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
   const[name,setName]=useState("");const[role,setRole]=useState("employee");
   const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
   const[newMsg,setNewMsg]=useState("");
+  const[msgErr,setMsgErr]=useState(false);
   const doAdd=()=>{if(!name.trim())return;onAdd({name:name.trim(),role});setName("");setRole("employee");};
   return(
     <div style={{maxWidth:860}}>
@@ -952,10 +955,14 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
       <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
         <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>DASHBOARD MESSAGES</div>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
-          <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>MESSAGE TEXT</div><input value={newMsg} onChange={e=>setNewMsg(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newMsg.trim()){onAddMsg(newMsg.trim());setNewMsg("");}}} placeholder="Enter a message to display on the dashboard..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
-          <button onClick={()=>{if(newMsg.trim()){onAddMsg(newMsg.trim());setNewMsg("");}}} disabled={!newMsg.trim()} style={{background:newMsg.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newMsg.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD MESSAGE</button>
+          <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>MESSAGE TEXT</div><input value={newMsg} onChange={e=>{setNewMsg(e.target.value);setMsgErr(false);}} onKeyDown={e=>{if(e.key==="Enter"&&newMsg.trim()){onAddMsg(newMsg.trim()).then(ok=>{if(ok)setNewMsg("");else setMsgErr(true);})}}} placeholder="Enter a message to display on the dashboard..." style={{width:"100%",background:C.card,border:`1.5px solid ${msgErr?C.red:C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+          <button onClick={()=>{if(newMsg.trim())onAddMsg(newMsg.trim()).then(ok=>{if(ok)setNewMsg("");else setMsgErr(true);});}} disabled={!newMsg.trim()} style={{background:newMsg.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newMsg.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD MESSAGE</button>
         </div>
-        {messages.length===0?(
+        {msgErr&&<div style={{padding:"12px 20px",background:"#fff3f3",borderBottom:`1px solid ${C.red}33`,fontSize:12,color:C.red,lineHeight:1.7}}>
+          ⚠ The <code style={{background:"#fde8e8",padding:"1px 5px"}}>messages</code> table doesn't exist yet. Run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{"create table public.messages (\n  id bigint generated always as identity primary key,\n  text text not null,\n  created_at timestamptz default now()\n);\nalter table public.messages enable row level security;\ncreate policy \"Allow all\" on public.messages for all using (true) with check (true);"}</pre>
+        </div>}
+        {messages.length===0&&!msgErr?(
           <div style={{padding:"20px",fontSize:13,color:C.textMuted,fontStyle:"italic"}}>No messages. Add one above to display it on the dashboard.</div>
         ):(
           <div>

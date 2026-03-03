@@ -129,19 +129,21 @@ export default function App(){
   const[fCa,setFCa]=useState("All");
   const[calMo,setCalMo]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const[goals,setGoals]=useState([]);
+  const[skuCounters,setSkuCounters]=useState([]);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
         supabase.from('goals').select('*').order('id'),
+        supabase.from('sku_counters').select('*').order('id'),
       ]);
-      [empRes,taskRes,recRes,goalRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
+      [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
       const loadedRec=(recRes.data??[]).map(recFromDb);
       const loadedTasks=(taskRes.data??[]).map(taskFromDb);
@@ -160,6 +162,7 @@ export default function App(){
       setTasks(allTasks);
       setRecurring(updRec);
       setGoals((goalRes.data??[]).map(goalFromDb));
+      setSkuCounters(skuRes.data??[]);
       setLoading(false);
     }
     load();
@@ -221,6 +224,14 @@ export default function App(){
   };
   const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));dbW('updGoal',await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id));};
   const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));dbW('delGoal',await supabase.from('goals').delete().eq('id',id));};
+
+  const incSku=async id=>{
+    const counter=skuCounters.find(c=>c.id===id);
+    if(!counter)return;
+    const newVal=counter.value+1;
+    setSkuCounters(p=>p.map(c=>c.id===id?{...c,value:newVal}:c));
+    dbW('incSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
+  };
 
   const addEmp=async e=>{
     const initials=mkI(e.name);
@@ -318,6 +329,7 @@ export default function App(){
           <NB label="CALENDAR"   active={view==="calendar"}   onClick={()=>setView("calendar")}/>
           {canEdit&&<NB label="↻ RECURRING" active={view==="recurring"} onClick={()=>setView("recurring")}/>}
           <NB label="GOALS" active={view==="goals"} onClick={()=>setView("goals")}/>
+          <NB label="SKU" active={view==="sku"} onClick={()=>setView("sku")}/>
           {isAdmin&&<NB label="⚙ ADMIN"     active={view==="admin"}     onClick={()=>setView("admin")}/>}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -338,11 +350,36 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
+        {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku}/>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp}/>}
       </div>
 
       {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit}/>}
       {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)}/>}
+    </div>
+  );
+}
+
+// ── SKU Panel ─────────────────────────────────────────────────────────────────
+function SkuPanel({counters,onInc}){
+  return(
+    <div>
+      <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:20}}>SKU COUNTERS</div>
+      <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:480}}>
+        {counters.map(c=>(
+          <div key={c.id} style={{background:C.surface,border:`1px solid ${C.border}`,padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 6px #0c123012"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:16}}>
+              <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value.toLocaleString()}</div>
+              <button onClick={()=>onInc(c.id)} style={{width:44,height:44,background:C.navy,color:"#fff",border:"none",fontSize:24,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
+                onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

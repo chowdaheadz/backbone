@@ -11,7 +11,7 @@ const PRIORITIES=["Low","Medium","High","Critical"];
 const PCOL={Low:"#1d5fa8",Medium:"#1a7f4b",High:"#c2610a",Critical:"#990000"};
 const STATUSES=["To Do","In Progress","Review","Done"];
 const SCOL={"To Do":"#6b7494","In Progress":"#1d5fa8","Review":"#c2610a","Done":"#1a7f4b"};
-const CATEGORIES=["Operations","Marketing","Fulfillment","IT","Finance","HR","General"];
+const CATEGORIES_DEFAULT=["Operations","Marketing","Fulfillment","IT","Finance","HR","General"];
 const ROLES=["admin","lead","employee"];
 const FREQS=["daily","weekly","biweekly","monthly"];
 const DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -133,6 +133,8 @@ export default function App(){
   const[skuCounters,setSkuCounters]=useState([]);
   const[launches,setLaunches]=useState([]);
   const[launchReady,setLaunchReady]=useState(false);
+  const[categories,setCategories]=useState(CATEGORIES_DEFAULT);
+  const[catReady,setCatReady]=useState(false);
   const[messages,setMessages]=useState([]);
   const[dashMsg,setDashMsg]=useState(null);
   const[loading,setLoading]=useState(true);
@@ -141,7 +143,7 @@ export default function App(){
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
@@ -149,6 +151,7 @@ export default function App(){
         supabase.from('sku_counters').select('*').order('id'),
         supabase.from('messages').select('*').order('id'),
         supabase.from('product_launches').select('*').order('id'),
+        supabase.from('categories').select('*').order('id'),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -175,6 +178,7 @@ export default function App(){
         .forEach(c=>supabase.from('sku_counters').update({value:1500}).eq('id',c.id));
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
+      if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
       setLoading(false);
     }
     load();
@@ -268,6 +272,18 @@ export default function App(){
     const newVal=!launch.checks[k];
     setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:newVal}}:l));
     dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
+  };
+
+  const addCategory=async name=>{
+    const trimmed=name.trim();
+    if(!trimmed||categories.includes(trimmed))return;
+    const res=await supabase.from('categories').insert({name:trimmed}).select().single();
+    dbW('addCategory',res);
+    if(!res.error){setCategories(p=>[...p,trimmed]);setCatReady(true);}
+  };
+  const delCategory=async name=>{
+    setCategories(p=>p.filter(c=>c!==name));
+    dbW('delCategory',await supabase.from('categories').delete().eq('name',name));
   };
 
   const hasPinCol=()=>emps.length>0&&'pin' in emps[0];
@@ -396,17 +412,17 @@ export default function App(){
       {dbError&&<div style={{background:"#fff0f0",borderBottom:`2px solid ${C.red}`,padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:C.red,fontWeight:700}}>⚠ DATABASE ERROR: {dbError}<button onClick={()=>setDbError(null)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontWeight:700,marginLeft:16}}>✕</button></div>}
 
       <div style={{padding:28}}>
-        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg}/>}
-        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave}/>}
+        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg} categories={categories}/>}
+        {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave} categories={categories}/>}
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
-        {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
+        {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
-        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg}/>}
+        {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
 
-      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit}/>}
-      {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)}/>}
+      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit} categories={categories}/>}
+      {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)} categories={categories}/>}
     </div>
   );
 }
@@ -590,7 +606,7 @@ function Login({emps,onLogin}){
 // ── Recurring Panel ───────────────────────────────────────────────────────────
 const BLANK_REC={title:"",category:"Operations",priority:"Medium",assignee:null,description:"",frequency:"weekly",dayOfWeek:1,dayOfMonth:1,active:true,nextDue:t0};
 
-function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle,onRunNow}){
+function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle,onRunNow,categories}){
   const[showForm,setShowForm]=useState(false);
   const[editingId,setEditingId]=useState(null);
   const[draft,setDraft]=useState(null);
@@ -741,7 +757,7 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
 
               {/* Task settings */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:18}}>
-                <ESel label="CATEGORY"         value={draft.category}     onChange={v=>setDraft({...draft,category:v})}             opts={CATEGORIES} full/>
+                <ESel label="CATEGORY"         value={draft.category}     onChange={v=>setDraft({...draft,category:v})}             opts={categories} full/>
                 <ESel label="PRIORITY"         value={draft.priority}     onChange={v=>setDraft({...draft,priority:v})}             opts={PRIORITIES} full/>
                 <ESel label="DEFAULT ASSIGNEE" value={draft.assignee||""} onChange={v=>setDraft({...draft,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
               </div>
@@ -802,7 +818,7 @@ function MC({task,emps,onClick,highlight}){
   </div>;
 }
 
-function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
+function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories}){
   const od=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)<today);
   const up=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)>=today).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).slice(0,5);
   const activeRec=recurring.filter(r=>r.active).length;
@@ -829,7 +845,7 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
         <div><SH label="UPCOMING DUE" color={C.navy}/>{up.length===0?<div style={{color:C.textMuted,fontSize:13}}>Nothing due soon.</div>:up.map(t=><MC key={t.id} task={t} emps={emps} onClick={()=>onOpen(t)}/>)}</div>
         <div>
           <SH label="BY CATEGORY" color={C.navy}/>
-          {CATEGORIES.map(cat=>{const n=tasks.filter(t=>t.category===cat&&t.status!=="Done").length;if(!n)return null;return<div key={cat} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span>{cat}</span><span style={{color:C.navy,fontWeight:800}}>{n}</span></div>;})}
+          {categories.map(cat=>{const n=tasks.filter(t=>t.category===cat&&t.status!=="Done").length;if(!n)return null;return<div key={cat} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span>{cat}</span><span style={{color:C.navy,fontWeight:800}}>{n}</span></div>;})}
         </div>
       </div>
       <div style={{marginTop:32}}>
@@ -843,7 +859,7 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg}){
 }
 
 // ── List View ─────────────────────────────────────────────────────────────────
-function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen,onUpdate}){
+function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen,onUpdate,categories}){
   return(
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -854,7 +870,7 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
         <FSel label="STATUS"   value={fSt} onChange={setFSt} opts={["All",...STATUSES]}/>
         <FSel label="PRIORITY" value={fPr} onChange={setFPr} opts={["All",...PRIORITIES]}/>
         <FSel label="ASSIGNEE" value={fAs} onChange={setFAs} opts={[{v:"All",l:"All"},...emps.map(e=>({v:e.id,l:e.name}))]}/>
-        <FSel label="CATEGORY" value={fCa} onChange={setFCa} opts={["All",...CATEGORIES]}/>
+        <FSel label="CATEGORY" value={fCa} onChange={setFCa} opts={["All",...categories]}/>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,boxShadow:"0 1px 6px #0c123012"}}>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 130px 110px",padding:"10px 16px",background:C.navy,fontSize:10,color:"#ffffffaa",letterSpacing:1,fontWeight:700}}>
@@ -935,7 +951,7 @@ function CalView({tasks,month,setMonth,onOpen}){
 }
 
 // ── Task Modal ────────────────────────────────────────────────────────────────
-function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,canEdit}){
+function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,canEdit,categories}){
   const[ed,setEd]=useState(false);
   const[dr,setDr]=useState(null);
   const[ct,setCt]=useState("");
@@ -978,7 +994,7 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20,padding:16,background:C.card,border:`1px solid ${C.border}`}}>
               <ESel label="STATUS"   value={dr.status}        onChange={v=>setDr({...dr,status:v})}               opts={STATUSES}   full/>
               <ESel label="PRIORITY" value={dr.priority}      onChange={v=>setDr({...dr,priority:v})}             opts={PRIORITIES} full/>
-              <ESel label="CATEGORY" value={dr.category}      onChange={v=>setDr({...dr,category:v})}             opts={CATEGORIES} full/>
+              <ESel label="CATEGORY" value={dr.category}      onChange={v=>setDr({...dr,category:v})}             opts={categories} full/>
               <ESel label="ASSIGNEE" value={dr.assignee||""} onChange={v=>setDr({...dr,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
               <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>DUE DATE</div><input type="date" value={dr.dueDate} onChange={e=>setDr({...dr,dueDate:e.target.value})} style={{background:C.surface,border:`1.5px solid ${C.border}`,color:C.text,padding:"6px 10px",fontFamily:"inherit",fontSize:12,width:"100%",boxSizing:"border-box"}}/></div>
             </div>
@@ -1010,7 +1026,7 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
 }
 
 // ── New Task Modal ────────────────────────────────────────────────────────────
-function NewTaskModal({task,emps,onChange,onCreate,onClose}){
+function NewTaskModal({task,emps,onChange,onCreate,onClose,categories}){
   return(
     <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}} onClick={onClose}>
       <div style={{background:C.surface,width:560,boxShadow:"0 12px 50px #0c123055",borderTop:`4px solid ${C.red}`}} onClick={e=>e.stopPropagation()}>
@@ -1019,7 +1035,7 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
           <div style={{marginBottom:16}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>TITLE *</div><input value={task.title} onChange={e=>onChange({...task,title:e.target.value})} placeholder="Task title..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"10px 12px",fontFamily:"inherit",fontSize:14,boxSizing:"border-box"}}/></div>
           <div style={{marginBottom:16}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>DESCRIPTION</div><textarea value={task.description} onChange={e=>onChange({...task,description:e.target.value})} rows={3} placeholder="Details..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
-            <ESel label="CATEGORY"  value={task.category}     onChange={v=>onChange({...task,category:v})}             opts={CATEGORIES} full/>
+            <ESel label="CATEGORY"  value={task.category}     onChange={v=>onChange({...task,category:v})}             opts={categories} full/>
             <ESel label="PRIORITY"  value={task.priority}     onChange={v=>onChange({...task,priority:v})}             opts={PRIORITIES} full/>
             <ESel label="STATUS"    value={task.status}       onChange={v=>onChange({...task,status:v})}               opts={STATUSES}   full/>
             <ESel label="ASSIGN TO" value={task.assignee||""} onChange={v=>onChange({...task,assignee:v?parseInt(v):null})} opts={[{v:"",l:"Unassigned"},...emps.map(e=>({v:e.id,l:e.name}))]} full/>
@@ -1036,7 +1052,38 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose}){
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
-function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}){
+function CategoriesSection({categories,catReady,onAdd,onDel}){
+  const[newCat,setNewCat]=useState("");
+  const doAdd=()=>{if(newCat.trim()){onAdd(newCat.trim());setNewCat("");}};
+  return(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
+      <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>TASK CATEGORIES</div>
+      {!catReady&&(
+        <div style={{padding:"12px 20px",background:"#fffbf0",border:`1px solid ${C.orange}33`,borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text,lineHeight:1.7}}>
+          <strong style={{color:C.orange}}>Categories table not set up.</strong> Changes won't persist until you run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{"create table public.categories (\n  id bigint generated always as identity primary key,\n  name text not null unique\n);\nalter table public.categories enable row level security;\ncreate policy \"Allow all\" on public.categories for all using (true) with check (true);\n-- seed defaults\ninsert into public.categories (name) values\n  ('Operations'),('Marketing'),('Fulfillment'),\n  ('IT'),('Finance'),('HR'),('General');"}</pre>
+        </div>
+      )}
+      <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
+        <div style={{flex:1}}><div style={{fontSize:11,color:C.textMuted,marginBottom:5,fontWeight:700}}>CATEGORY NAME</div><input value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="e.g. Logistics" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+        <button onClick={doAdd} disabled={!newCat.trim()} style={{background:newCat.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:newCat.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>ADD CATEGORY</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,padding:"14px 20px"}}>
+        {categories.map(cat=>(
+          <div key={cat} style={{display:"flex",alignItems:"center",gap:0,background:C.card,border:`1px solid ${C.border}`}}>
+            <span style={{padding:"5px 12px",fontSize:12,fontWeight:700,color:C.navy,letterSpacing:0.5}}>{cat}</span>
+            <button onClick={()=>onDel(cat)} style={{background:"none",border:"none",borderLeft:`1px solid ${C.border}`,color:C.textMuted,padding:"5px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit",lineHeight:1}}
+              onMouseEnter={x=>{x.currentTarget.style.background=C.red+"18";x.currentTarget.style.color=C.red;}}
+              onMouseLeave={x=>{x.currentTarget.style.background="none";x.currentTarget.style.color=C.textMuted;}}>✕</button>
+          </div>
+        ))}
+        {categories.length===0&&<span style={{fontSize:12,color:C.textMuted,fontStyle:"italic"}}>No categories. Add one above.</span>}
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,categories,catReady,onAddCat,onDelCat}){
   const[name,setName]=useState("");const[role,setRole]=useState("employee");const[addPin,setAddPin]=useState("");
   const[editId,setEditId]=useState(null);const[draft,setDraft]=useState(null);const[confirm,setConfirm]=useState(null);
   const[newMsg,setNewMsg]=useState("");
@@ -1134,6 +1181,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg}
           </div>
         )}
       </div>
+      <CategoriesSection categories={categories} catReady={catReady} onAdd={onAddCat} onDel={onDelCat}/>
       {confirm&&(
         <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
           <div style={{background:C.surface,width:430,borderTop:`4px solid ${C.red}`,boxShadow:"0 12px 50px #0c123055"}}>

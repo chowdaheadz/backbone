@@ -382,7 +382,7 @@ function SkuPanel({counters,onInc,onDec}){
               <div style={{fontSize:13,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value.toLocaleString()}</div>
+              <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value}</div>
               <button onClick={()=>onDec(c.id)} style={{width:44,height:44,background:C.textMuted,color:"#fff",border:"none",fontSize:28,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
                 onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
                 onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>

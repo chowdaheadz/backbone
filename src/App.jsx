@@ -162,7 +162,10 @@ export default function App(){
       setTasks(allTasks);
       setRecurring(updRec);
       setGoals((goalRes.data??[]).map(goalFromDb));
-      setSkuCounters(skuRes.data??[]);
+      const skuData=(skuRes.data??[]).map(c=>c.value===0?{...c,value:1500}:c);
+      setSkuCounters(skuData);
+      skuData.filter(c=>c.value===1500&&(skuRes.data??[]).find(o=>o.id===c.id)?.value===0)
+        .forEach(c=>supabase.from('sku_counters').update({value:1500}).eq('id',c.id));
       setLoading(false);
     }
     load();
@@ -231,6 +234,13 @@ export default function App(){
     const newVal=counter.value+1;
     setSkuCounters(p=>p.map(c=>c.id===id?{...c,value:newVal}:c));
     dbW('incSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
+  };
+  const decSku=async id=>{
+    const counter=skuCounters.find(c=>c.id===id);
+    if(!counter||counter.value<=0)return;
+    const newVal=counter.value-1;
+    setSkuCounters(p=>p.map(c=>c.id===id?{...c,value:newVal}:c));
+    dbW('decSku',await supabase.from('sku_counters').update({value:newVal}).eq('id',id));
   };
 
   const addEmp=async e=>{
@@ -350,7 +360,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku}/>}
+        {view==="sku"       &&<SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp}/>}
       </div>
 
@@ -361,7 +371,7 @@ export default function App(){
 }
 
 // ── SKU Panel ─────────────────────────────────────────────────────────────────
-function SkuPanel({counters,onInc}){
+function SkuPanel({counters,onInc,onDec}){
   return(
     <div>
       <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700,marginBottom:20}}>SKU COUNTERS</div>
@@ -371,8 +381,11 @@ function SkuPanel({counters,onInc}){
             <div>
               <div style={{fontSize:13,fontWeight:700,color:C.navy,letterSpacing:1}}>{c.name}</div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
               <div style={{fontSize:36,fontWeight:900,color:C.navy,minWidth:80,textAlign:"right"}}>{c.value.toLocaleString()}</div>
+              <button onClick={()=>onDec(c.id)} style={{width:44,height:44,background:C.textMuted,color:"#fff",border:"none",fontSize:28,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                onMouseEnter={x=>x.currentTarget.style.opacity="0.8"}
+                onMouseLeave={x=>x.currentTarget.style.opacity="1"}>−</button>
               <button onClick={()=>onInc(c.id)} style={{width:44,height:44,background:C.navy,color:"#fff",border:"none",fontSize:24,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
                 onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
                 onMouseLeave={x=>x.currentTarget.style.background=C.navy}>+</button>

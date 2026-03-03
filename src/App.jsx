@@ -621,9 +621,9 @@ function RecurringPanel({recurring,tasks,emps,canEdit,onAdd,onUpd,onDel,onToggle
       {/* Stats */}
       <div style={{display:"flex",gap:14,marginBottom:32}}>
         {[{l:"TOTAL TEMPLATES",v:recurring.length,c:C.navy},{l:"ACTIVE",v:active,c:C.green},{l:"PAUSED",v:recurring.length-active,c:C.textMuted},{l:"DUE TODAY",v:dueToday,c:dueToday>0?C.red:C.textMuted}].map(s=>(
-          <div key={s.l} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderTop:`4px solid ${s.c}`,padding:"14px 18px",boxShadow:"0 1px 4px #0c123010"}}>
-            <div style={{fontSize:28,fontWeight:900,color:s.c}}>{s.v}</div>
-            <div style={{fontSize:10,color:C.navy,letterSpacing:1,fontWeight:700,marginTop:4}}>{s.l}</div>
+          <div key={s.l} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderTop:`3px solid ${s.c}`,padding:"7px 18px",boxShadow:"0 1px 4px #0c123010"}}>
+            <div style={{fontSize:18,fontWeight:900,color:s.c}}>{s.v}</div>
+            <div style={{fontSize:10,color:C.navy,letterSpacing:1,fontWeight:700,marginTop:2}}>{s.l}</div>
           </div>
         ))}
       </div>

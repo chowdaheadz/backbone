@@ -274,9 +274,7 @@ export default function App(){
     dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
   };
   const completeLaunch=async(launch)=>{
-    console.log('[backbone] completeLaunch firing for',launch.name,'user.id=',user.id);
     const res=await supabase.from('tasks').insert({title:`${launch.name} - Verify`,category:'Products',priority:'Medium',status:'To Do',assignee:user.id,due_date:t0,created_by:user.id,description:'',subtasks:[],comments:[]}).select().single();
-    console.log('[backbone] completeLaunch result',res);
     dbW('completeLaunch',res);
     if(res.data){setTasks(p=>[...p,taskFromDb(res.data)]);return true;}
     return false;
@@ -502,14 +500,14 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onComplete})
         <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
       ):(
         <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
-          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) auto 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
+          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 110px 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
             <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/><div/>
           </div>
           {launches.map(l=>{
             const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
             const allDone=done===LAUNCH_CHECKS.length;
             return(
-              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) auto 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
+              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 110px 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
                 onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>

@@ -113,7 +113,7 @@ function SC({label,value,color,sub}){return<div style={{background:C.surface,bor
 const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
-const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{A:r.check_a,B:r.check_b,C:r.check_c,D:r.check_d}});
+const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{Desc:r.check_desc,Tags:r.check_tags,Images:r.check_images,AR4:r.check_ar4,Sirv:r.check_sirv,Linx:r.check_linx,Linx2:r.check_linx2}});
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App(){
@@ -257,7 +257,7 @@ export default function App(){
   };
 
   const addLaunch=async l=>{
-    const res=await supabase.from('product_launches').insert({name:l.name,sku:l.sku,check_a:false,check_b:false,check_c:false,check_d:false}).select().single();
+    const res=await supabase.from('product_launches').insert({name:l.name,sku:l.sku,check_desc:false,check_tags:false,check_images:false,check_ar4:false,check_sirv:false,check_linx:false,check_linx2:false}).select().single();
     dbW('addLaunch',res);
     if(res.data)setLaunches(p=>[...p,launchFromDb(res.data)]);
   };
@@ -266,7 +266,7 @@ export default function App(){
     dbW('delLaunch',await supabase.from('product_launches').delete().eq('id',id));
   };
   const togLaunch=async(id,k)=>{
-    const col={A:'check_a',B:'check_b',C:'check_c',D:'check_d'}[k];
+    const col={Desc:'check_desc',Tags:'check_tags',Images:'check_images',AR4:'check_ar4',Sirv:'check_sirv',Linx:'check_linx',Linx2:'check_linx2'}[k];
     const launch=launches.find(l=>l.id===id);
     if(!launch)return;
     const newVal=!launch.checks[k];
@@ -459,7 +459,7 @@ function SkuPanel({counters,onInc,onDec}){
 }
 
 // ── Product Launch Panel ───────────────────────────────────────────────────────
-const LAUNCH_CHECKS=["A","B","C","D"];
+const LAUNCH_CHECKS=["Desc","Tags","Images","AR4","Sirv","Linx","Linx2"];
 function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
@@ -476,7 +476,7 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
       {!ready&&(
         <div style={{padding:"12px 14px",background:"#fffbf0",border:`1px solid ${C.orange}55`,borderTop:"none",borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text}}>
           <strong style={{color:C.orange}}>Table not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor:
-          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"create table public.product_launches (\n  id bigint generated always as identity primary key,\n  name text not null,\n  sku text not null,\n  check_a boolean default false,\n  check_b boolean default false,\n  check_c boolean default false,\n  check_d boolean default false,\n  created_at timestamptz default now()\n);\nalter table public.product_launches enable row level security;\ncreate policy \"Allow all\" on public.product_launches for all using (true) with check (true);"}</pre>
+          <pre style={{margin:"6px 0 0",background:"#1a1a2e",color:"#a8d8a8",padding:"8px 12px",fontSize:11,fontFamily:"monospace",overflowX:"auto",lineHeight:1.6}}>{"create table public.product_launches (\n  id bigint generated always as identity primary key,\n  name text not null,\n  sku text not null,\n  check_desc boolean default false,\n  check_tags boolean default false,\n  check_images boolean default false,\n  check_ar4 boolean default false,\n  check_sirv boolean default false,\n  check_linx boolean default false,\n  check_linx2 boolean default false,\n  created_at timestamptz default now()\n);\nalter table public.product_launches enable row level security;\ncreate policy \"Allow all\" on public.product_launches for all using (true) with check (true);"}</pre>
         </div>
       )}
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-end"}}>
@@ -488,14 +488,14 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
         <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
       ):(
         <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
-          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
+          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
             <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/>
           </div>
           {launches.map(l=>{
             const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
             const allDone=done===LAUNCH_CHECKS.length;
             return(
-              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(4,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
+              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
                 onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>

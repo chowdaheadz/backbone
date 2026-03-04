@@ -274,7 +274,7 @@ export default function App(){
     dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
   };
   const completeLaunch=async(launch)=>{
-    const res=await supabase.from('tasks').insert({title:`${launch.name} - Verify`,category:'Products',priority:'Medium',status:'To Do',assignee:null,due_date:t0,created_by:user?.id??null,description:'',subtasks:[],comments:[]}).select().single();
+    const res=await supabase.from('tasks').insert({title:`${launch.name} - Verify`,category:'Products',priority:'Medium',status:'To Do',assignee:user.id,due_date:t0,created_by:user.id,description:'',subtasks:[],comments:[]}).select().single();
     dbW('completeLaunch',res);
     if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
   };

@@ -121,7 +121,7 @@ export default function App(){
   const[emps,setEmps]=useState([]);
   const[tasks,setTasks]=useState([]);
   const[recurring,setRecurring]=useState([]);
-  const[view,setView]=useState("dashboard");
+  const[view,setView]=useState("list");
   const[modal,setModal]=useState(null);
   const[newT,setNewT]=useState(null);
   const[fSt,setFSt]=useState("All");

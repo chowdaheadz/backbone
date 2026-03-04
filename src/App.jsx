@@ -274,9 +274,12 @@ export default function App(){
     dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
   };
   const completeLaunch=async(launch)=>{
+    console.log('[backbone] completeLaunch firing for',launch.name,'user.id=',user.id);
     const res=await supabase.from('tasks').insert({title:`${launch.name} - Verify`,category:'Products',priority:'Medium',status:'To Do',assignee:user.id,due_date:t0,created_by:user.id,description:'',subtasks:[],comments:[]}).select().single();
+    console.log('[backbone] completeLaunch result',res);
     dbW('completeLaunch',res);
-    if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
+    if(res.data){setTasks(p=>[...p,taskFromDb(res.data)]);return true;}
+    return false;
   };
 
   const addCategory=async name=>{
@@ -468,10 +471,17 @@ const LAUNCH_CHECKS=["Desc","Tags","Images","AR4","Sirv","Linx","Linx2"];
 function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onComplete}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
+  const[completing,setCompleting]=useState({});
   const add=()=>{
     if(!name.trim()||!sku.trim())return;
     onAdd({name:name.trim(),sku:sku.trim()});
     setName("");setSku("");
+  };
+  const handleComplete=async(l)=>{
+    setCompleting(p=>({...p,[l.id]:'loading'}));
+    const ok=await onComplete(l);
+    setCompleting(p=>({...p,[l.id]:ok?'done':'error'}));
+    setTimeout(()=>setCompleting(p=>({...p,[l.id]:null})),3000);
   };
   const remove=onRemove;
   return(
@@ -511,8 +521,10 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onComplete})
                     <input type="checkbox" checked={!!l.checks[k]} onChange={()=>onToggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
                   </div>
                 ))}
-                <button onClick={()=>onComplete(l)} style={{background:C.green,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}
-                  onMouseEnter={x=>{x.currentTarget.style.opacity="0.85";}} onMouseLeave={x=>{x.currentTarget.style.opacity="1";}}>COMPLETE</button>
+                <button onClick={()=>handleComplete(l)} disabled={completing[l.id]==='loading'}
+                  style={{background:completing[l.id]==='done'?C.green:completing[l.id]==='error'?C.red:C.green,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:completing[l.id]==='loading'?"default":"pointer",letterSpacing:1,whiteSpace:"nowrap",opacity:completing[l.id]==='loading'?0.6:1}}>
+                  {completing[l.id]==='loading'?'...' :completing[l.id]==='done'?'✓ TASK CREATED':completing[l.id]==='error'?'✗ ERROR':'COMPLETE'}
+                </button>
                 <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
                   onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
                   onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>

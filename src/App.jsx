@@ -517,41 +517,59 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onComplete})
         <div style={{width:150}}><div style={{fontSize:10,color:C.textMuted,marginBottom:4,fontWeight:700,letterSpacing:1}}>PRODUCT SKU</div><input value={sku} onChange={e=>setSku(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="e.g. HDIE-001" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
         <button onClick={add} disabled={!name.trim()||!sku.trim()} style={{background:name.trim()&&sku.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"7px 20px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:name.trim()&&sku.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap",height:34}}>+ ADD</button>
       </div>
-      {launches.length===0?(
-        <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
-      ):(
-        <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
+      {(()=>{
+        const active=launches.filter(l=>LAUNCH_CHECKS.some(k=>!l.checks[k]));
+        const completed=launches.filter(l=>LAUNCH_CHECKS.every(k=>l.checks[k]));
+        const renderRow=(l,isCompleted)=>{
+          const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
+          return(
+            <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 110px 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:isCompleted?"#f0fff4":"transparent",transition:"background 0.15s"}}
+              onMouseEnter={e=>{if(!isCompleted)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!isCompleted)e.currentTarget.style.background=isCompleted?"#f0fff4":"transparent";}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:isCompleted?C.green:C.text,textDecoration:isCompleted?"line-through":"none"}}>{l.name}</div>
+                <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
+              </div>
+              <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
+              {LAUNCH_CHECKS.map(k=>(
+                <div key={k} style={{display:"flex",justifyContent:"center"}}>
+                  <input type="checkbox" checked={!!l.checks[k]} onChange={()=>onToggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
+                </div>
+              ))}
+              <button onClick={()=>handleComplete(l)} disabled={completing[l.id]==='loading'}
+                style={{background:completing[l.id]==='done'?C.green:completing[l.id]==='error'?C.red:C.green,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:completing[l.id]==='loading'?"default":"pointer",letterSpacing:1,whiteSpace:"nowrap",opacity:completing[l.id]==='loading'?0.6:1}}>
+                {completing[l.id]==='loading'?'...' :completing[l.id]==='done'?'✓ TASK CREATED':completing[l.id]==='error'?'✗ ERROR':'COMPLETE'}
+              </button>
+              <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
+                onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
+                onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+            </div>
+          );
+        };
+        const colHeader=(
           <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 110px 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
             <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/><div/>
           </div>
-          {launches.map(l=>{
-            const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
-            const allDone=done===LAUNCH_CHECKS.length;
-            return(
-              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 110px 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
-                onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
-                  <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
-                </div>
-                <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
-                {LAUNCH_CHECKS.map(k=>(
-                  <div key={k} style={{display:"flex",justifyContent:"center"}}>
-                    <input type="checkbox" checked={!!l.checks[k]} onChange={()=>onToggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
-                  </div>
-                ))}
-                <button onClick={()=>handleComplete(l)} disabled={completing[l.id]==='loading'}
-                  style={{background:completing[l.id]==='done'?C.green:completing[l.id]==='error'?C.red:C.green,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:completing[l.id]==='loading'?"default":"pointer",letterSpacing:1,whiteSpace:"nowrap",opacity:completing[l.id]==='loading'?0.6:1}}>
-                  {completing[l.id]==='loading'?'...' :completing[l.id]==='done'?'✓ TASK CREATED':completing[l.id]==='error'?'✗ ERROR':'COMPLETE'}
-                </button>
-                <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
-                  onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
-                  onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+        );
+        return(<>
+          {active.length===0?(
+            <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
+          ):(
+            <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
+              {colHeader}
+              {active.map(l=>renderRow(l,false))}
+            </div>
+          )}
+          {completed.length>0&&(
+            <div style={{marginTop:24}}>
+              <div style={{background:C.green,padding:"10px 16px",fontSize:11,color:"#ffffffcc",letterSpacing:3,fontWeight:700}}>COMPLETED</div>
+              <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
+                {colHeader}
+                {completed.map(l=>renderRow(l,true))}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          )}
+        </>);
+      })()}
     </div>
   );
 }

@@ -297,7 +297,6 @@ export default function App(){
   const ideaToTask=(idea)=>{
     setNewT({...blank,title:idea.title,description:idea.notes??''});
     delIdea(idea.id);
-    setView('list');
   };
 
   const addCategory=async name=>{
@@ -1271,8 +1270,8 @@ function IdeasPanel({ideas,ready,onAdd,onDel,onToTask}){
   };
   const SQL=`create table ideas (\n  id bigint generated always as identity primary key,\n  title text not null,\n  notes text default '',\n  created_at timestamptz default now(),\n  created_by bigint references employees(id)\n);`;
   return(
-    <div style={{maxWidth:860,margin:"0 auto",padding:"24px 16px"}}>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:0}}>
+    <div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:16}}>
         <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2,display:"flex",alignItems:"center",gap:10}}>
           <span>💡 IDEAS</span>
           <span style={{fontSize:10,color:"#ffffff66",fontWeight:400,letterSpacing:1}}>{ideas.length} stored</span>
@@ -1286,54 +1285,57 @@ function IdeasPanel({ideas,ready,onAdd,onDel,onToTask}){
         <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submit()}
-              placeholder="New idea…"
-              style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:13,outline:"none"}}/>
-            <button onClick={()=>setShowNotes(o=>!o)} title="Add notes"
-              style={{background:"none",border:`1px solid ${C.border}`,color:showNotes?C.navy:C.textMuted,padding:"7px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>
+              placeholder="Capture an idea…"
+              style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 14px",fontFamily:"inherit",fontSize:13,outline:"none"}}/>
+            <button onClick={()=>setShowNotes(o=>!o)}
+              style={{background:"none",border:`1px solid ${showNotes?C.navy:C.border}`,color:showNotes?C.navy:C.textMuted,padding:"8px 14px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap"}}>
               {showNotes?"▲ NOTES":"▼ NOTES"}
             </button>
             <button onClick={submit} disabled={!title.trim()}
-              style={{background:title.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"8px 20px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:title.trim()?"pointer":"default",letterSpacing:1}}>
-              + ADD
+              style={{background:title.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 22px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:title.trim()?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>
+              + ADD IDEA
             </button>
           </div>
           {showNotes&&(
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional notes…" rows={3}
-              style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:12,resize:"vertical",boxSizing:"border-box"}}/>
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional notes, context, or details…" rows={3}
+              style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 14px",fontFamily:"inherit",fontSize:12,resize:"vertical",boxSizing:"border-box"}}/>
           )}
         </div>
-        {ideas.length===0?(
-          <div style={{padding:"24px 18px",fontSize:12,color:C.textMuted,fontStyle:"italic",textAlign:"center"}}>No ideas yet. Add one above.</div>
-        ):(
-          <div>
-            {ideas.map(idea=>(
-              <div key={idea.id} style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"flex-start",gap:12,background:"transparent",transition:"background 0.12s"}}
-                onMouseEnter={e=>e.currentTarget.style.background=C.card}
-                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:idea.notes?4:0}}>{idea.title}</div>
-                  {idea.notes&&<div style={{fontSize:12,color:C.textMuted,whiteSpace:"pre-wrap",lineHeight:1.5}}>{idea.notes}</div>}
-                  <div style={{fontSize:10,color:C.textMuted,marginTop:4,letterSpacing:0.5}}>
-                    {new Date(idea.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
-                  <button onClick={()=>onToTask(idea)} title="Convert to task"
-                    style={{background:C.navy,border:"none",color:"#fff",padding:"5px 12px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}
-                    onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
-                    onMouseLeave={x=>x.currentTarget.style.background=C.navy}>
-                    → TASK
+      </div>
+
+      {ideas.length===0?(
+        <div style={{padding:"48px 0",fontSize:13,color:C.textMuted,fontStyle:"italic",textAlign:"center"}}>No ideas yet. Add one above.</div>
+      ):(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+          {ideas.map(idea=>(
+            <div key={idea.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.navy}`,display:"flex",flexDirection:"column",padding:"16px 18px",gap:10,transition:"box-shadow 0.12s"}}
+              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 12px #0c123018"}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,marginBottom:6}}>{idea.title}</div>
+                {idea.notes&&<div style={{fontSize:12,color:C.textMuted,whiteSpace:"pre-wrap",lineHeight:1.6}}>{idea.notes}</div>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
+                <span style={{fontSize:10,color:C.textMuted,letterSpacing:0.5}}>
+                  {new Date(idea.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                </span>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>onToTask(idea)}
+                    style={{background:C.red,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}
+                    onMouseEnter={x=>x.currentTarget.style.opacity="0.85"}
+                    onMouseLeave={x=>x.currentTarget.style.opacity="1"}>
+                    → MAKE TASK
                   </button>
-                  <button onClick={()=>onDel(idea.id)} title="Delete idea"
+                  <button onClick={()=>onDel(idea.id)}
                     style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:28,height:28,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
                     onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
                     onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

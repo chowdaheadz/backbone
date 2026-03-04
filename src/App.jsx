@@ -1127,6 +1127,66 @@ function NewTaskModal({task,emps,onChange,onCreate,onClose,categories}){
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
+const ROLE_PERMISSIONS=[
+  {label:"View Dashboard",        admin:true, lead:true,  employee:true },
+  {label:"View Tasks",            admin:true, lead:true,  employee:true },
+  {label:"Create & Edit Tasks",   admin:true, lead:true,  employee:false},
+  {label:"Delete Tasks",          admin:true, lead:true,  employee:false},
+  {label:"View Calendar",         admin:true, lead:true,  employee:true },
+  {label:"Recurring Tasks",       admin:true, lead:true,  employee:false},
+  {label:"Goals",                 admin:true, lead:true,  employee:true },
+  {label:"Ideas",                 admin:true, lead:true,  employee:true },
+  {label:"SKU & Product Launch",  admin:true, lead:true,  employee:true },
+  {label:"Admin Panel",           admin:true, lead:false, employee:false},
+];
+function PermissionsSection({emps}){
+  const Check=({ok})=>(
+    <div style={{display:"flex",justifyContent:"center"}}>
+      <span style={{fontSize:15,color:ok?C.green:C.border}}>{ok?"✓":"—"}</span>
+    </div>
+  );
+  return(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,marginTop:28,boxShadow:"0 1px 4px #0c123010"}}>
+      <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span>ROLE PERMISSIONS</span>
+        <span style={{fontSize:10,color:"#ffffff66",fontWeight:400,letterSpacing:1}}>based on assigned role</span>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr style={{background:C.card,borderBottom:`2px solid ${C.border}`}}>
+              <th style={{padding:"10px 20px",textAlign:"left",fontSize:11,fontWeight:700,color:C.textMuted,letterSpacing:1,width:"40%"}}>FEATURE</th>
+              {[{role:"admin",color:C.red},{role:"lead",color:C.orange},{role:"employee",color:C.blue}].map(({role,color})=>(
+                <th key={role} style={{padding:"10px 16px",textAlign:"center",fontSize:11,fontWeight:700,letterSpacing:1}}>
+                  <span style={{background:color+"18",color,border:`1px solid ${color}55`,padding:"3px 12px",display:"inline-block"}}>{role.toUpperCase()}</span>
+                  <div style={{fontSize:10,color:C.textMuted,fontWeight:400,marginTop:4,letterSpacing:0}}>
+                    {emps.filter(e=>e.role===role).length} {emps.filter(e=>e.role===role).length===1?"member":"members"}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ROLE_PERMISSIONS.map((p,i)=>(
+              <tr key={p.label} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?"transparent":C.card+"88"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.card}
+                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"transparent":C.card+"88"}>
+                <td style={{padding:"10px 20px",color:C.text,fontWeight:500}}>{p.label}</td>
+                <td style={{padding:"10px 16px"}}><Check ok={p.admin}/></td>
+                <td style={{padding:"10px 16px"}}><Check ok={p.lead}/></td>
+                <td style={{padding:"10px 16px"}}><Check ok={p.employee}/></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{padding:"10px 20px",fontSize:11,color:C.textMuted,borderTop:`1px solid ${C.border}`}}>
+        Role is set per employee above. Change an employee's role to adjust their access.
+      </div>
+    </div>
+  );
+}
+
 function CategoriesSection({categories,catReady,onAdd,onDel}){
   const[newCat,setNewCat]=useState("");
   const doAdd=()=>{if(newCat.trim()){onAdd(newCat.trim());setNewCat("");}};
@@ -1256,6 +1316,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
           </div>
         )}
       </div>
+      <PermissionsSection emps={emps}/>
       <CategoriesSection categories={categories} catReady={catReady} onAdd={onAddCat} onDel={onDelCat}/>
       {confirm&&(
         <div style={{position:"fixed",inset:0,background:"#0c123077",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>

@@ -135,6 +135,8 @@ export default function App(){
   const[launchReady,setLaunchReady]=useState(false);
   const[categories,setCategories]=useState(CATEGORIES_DEFAULT);
   const[catReady,setCatReady]=useState(false);
+  const[ideas,setIdeas]=useState([]);
+  const[ideaReady,setIdeaReady]=useState(false);
   const[messages,setMessages]=useState([]);
   const[dashMsg,setDashMsg]=useState(null);
   const[loading,setLoading]=useState(true);
@@ -143,7 +145,7 @@ export default function App(){
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes,ideaRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
@@ -152,6 +154,7 @@ export default function App(){
         supabase.from('messages').select('*').order('id'),
         supabase.from('product_launches').select('*').order('id'),
         supabase.from('categories').select('*').order('id'),
+        supabase.from('ideas').select('*').order('id',{ascending:false}),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -179,6 +182,7 @@ export default function App(){
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
       if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
+      if(!ideaRes.error){setIdeas(ideaRes.data??[]);setIdeaReady(true);}
       setLoading(false);
     }
     load();
@@ -278,6 +282,22 @@ export default function App(){
     dbW('completeLaunch',res);
     if(res.data){setTasks(p=>[...p,taskFromDb(res.data)]);return true;}
     return false;
+  };
+
+  const addIdea=async(title,notes)=>{
+    if(!title.trim())return;
+    const res=await supabase.from('ideas').insert({title:title.trim(),notes:notes.trim(),created_by:user.id}).select().single();
+    dbW('addIdea',res);
+    if(res.data)setIdeas(p=>[res.data,...p]);
+  };
+  const delIdea=async id=>{
+    setIdeas(p=>p.filter(x=>x.id!==id));
+    dbW('delIdea',await supabase.from('ideas').delete().eq('id',id));
+  };
+  const ideaToTask=(idea)=>{
+    setNewT({...blank,title:idea.title,description:idea.notes??''});
+    delIdea(idea.id);
+    setView('list');
   };
 
   const addCategory=async name=>{
@@ -402,6 +422,7 @@ export default function App(){
           <NB label="CALENDAR"   active={view==="calendar"}   onClick={()=>setView("calendar")}/>
           {canEdit&&<NB label="↻ RECURRING" active={view==="recurring"} onClick={()=>setView("recurring")}/>}
           <NB label="GOALS" active={view==="goals"} onClick={()=>setView("goals")}/>
+          <NB label="💡 IDEAS" active={view==="ideas"} onClick={()=>setView("ideas")}/>
           <NB label="SKU" active={view==="sku"} onClick={()=>setView("sku")}/>
           {isAdmin&&<NB label="⚙ ADMIN"     active={view==="admin"}     onClick={()=>setView("admin")}/>}
         </div>
@@ -423,6 +444,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
+        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} onAdd={addIdea} onDel={delIdea} onToTask={ideaToTask}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch} onComplete={completeLaunch}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
@@ -1233,6 +1255,85 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Ideas ──────────────────────────────────────────────────────────────────────
+function IdeasPanel({ideas,ready,onAdd,onDel,onToTask}){
+  const[title,setTitle]=useState("");
+  const[notes,setNotes]=useState("");
+  const[showNotes,setShowNotes]=useState(false);
+  const submit=()=>{
+    if(!title.trim())return;
+    onAdd(title,notes);
+    setTitle("");setNotes("");setShowNotes(false);
+  };
+  const SQL=`create table ideas (\n  id bigint generated always as identity primary key,\n  title text not null,\n  notes text default '',\n  created_at timestamptz default now(),\n  created_by bigint references employees(id)\n);`;
+  return(
+    <div style={{maxWidth:860,margin:"0 auto",padding:"24px 16px"}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:0}}>
+        <div style={{background:C.navy,padding:"12px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2,display:"flex",alignItems:"center",gap:10}}>
+          <span>💡 IDEAS</span>
+          <span style={{fontSize:10,color:"#ffffff66",fontWeight:400,letterSpacing:1}}>{ideas.length} stored</span>
+        </div>
+        {!ready&&(
+          <div style={{padding:"14px 18px",fontSize:12,color:C.orange,background:"#fff8ee",borderBottom:`1px solid ${C.border}`}}>
+            <strong style={{color:C.orange}}>Table not set up.</strong> Run this SQL in your Supabase dashboard → SQL Editor:<br/>
+            <pre style={{margin:"8px 0 0",padding:"10px 14px",background:C.card,border:`1px solid ${C.border}`,fontSize:11,overflowX:"auto",color:C.text,lineHeight:1.6}}>{SQL}</pre>
+          </div>
+        )}
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&submit()}
+              placeholder="New idea…"
+              style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:13,outline:"none"}}/>
+            <button onClick={()=>setShowNotes(o=>!o)} title="Add notes"
+              style={{background:"none",border:`1px solid ${C.border}`,color:showNotes?C.navy:C.textMuted,padding:"7px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>
+              {showNotes?"▲ NOTES":"▼ NOTES"}
+            </button>
+            <button onClick={submit} disabled={!title.trim()}
+              style={{background:title.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"8px 20px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:title.trim()?"pointer":"default",letterSpacing:1}}>
+              + ADD
+            </button>
+          </div>
+          {showNotes&&(
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional notes…" rows={3}
+              style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:12,resize:"vertical",boxSizing:"border-box"}}/>
+          )}
+        </div>
+        {ideas.length===0?(
+          <div style={{padding:"24px 18px",fontSize:12,color:C.textMuted,fontStyle:"italic",textAlign:"center"}}>No ideas yet. Add one above.</div>
+        ):(
+          <div>
+            {ideas.map(idea=>(
+              <div key={idea.id} style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"flex-start",gap:12,background:"transparent",transition:"background 0.12s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.card}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:idea.notes?4:0}}>{idea.title}</div>
+                  {idea.notes&&<div style={{fontSize:12,color:C.textMuted,whiteSpace:"pre-wrap",lineHeight:1.5}}>{idea.notes}</div>}
+                  <div style={{fontSize:10,color:C.textMuted,marginTop:4,letterSpacing:0.5}}>
+                    {new Date(idea.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
+                  <button onClick={()=>onToTask(idea)} title="Convert to task"
+                    style={{background:C.navy,border:"none",color:"#fff",padding:"5px 12px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}
+                    onMouseEnter={x=>x.currentTarget.style.background=C.navyLight}
+                    onMouseLeave={x=>x.currentTarget.style.background=C.navy}>
+                    → TASK
+                  </button>
+                  <button onClick={()=>onDel(idea.id)} title="Delete idea"
+                    style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:28,height:28,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
+                    onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
+                    onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

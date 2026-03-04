@@ -265,13 +265,10 @@ export default function App(){
     setLaunches(p=>p.filter(l=>l.id!==id));
     dbW('delLaunch',await supabase.from('product_launches').delete().eq('id',id));
   };
-  const togLaunch=async(id,k)=>{
-    const col={Desc:'check_desc',Tags:'check_tags',Images:'check_images',AR4:'check_ar4',Sirv:'check_sirv',Linx:'check_linx',Linx2:'check_linx2'}[k];
-    const launch=launches.find(l=>l.id===id);
-    if(!launch)return;
-    const newVal=!launch.checks[k];
-    setLaunches(p=>p.map(l=>l.id===id?{...l,checks:{...l.checks,[k]:newVal}}:l));
-    dbW('togLaunch',await supabase.from('product_launches').update({[col]:newVal}).eq('id',id));
+  const completeLaunch=async(launch)=>{
+    const res=await supabase.from('tasks').insert({title:`${launch.name} - Verify`,category:'Products',priority:'Medium',status:'To Do',assignee:null,due_date:t0,created_by:user?.id??null,description:'',subtasks:[],comments:[]}).select().single();
+    dbW('completeLaunch',res);
+    if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
   };
 
   const addCategory=async name=>{
@@ -417,7 +414,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
+        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onComplete={completeLaunch}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
 
@@ -459,8 +456,7 @@ function SkuPanel({counters,onInc,onDec}){
 }
 
 // ── Product Launch Panel ───────────────────────────────────────────────────────
-const LAUNCH_CHECKS=["Desc","Tags","Images","AR4","Sirv","Linx","Linx2"];
-function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
+function ProductLaunchPanel({launches,ready,onAdd,onRemove,onComplete}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
   const add=()=>{
@@ -468,7 +464,6 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
     onAdd({name:name.trim(),sku:sku.trim()});
     setName("");setSku("");
   };
-  const toggle=onToggle;
   const remove=onRemove;
   return(
     <div>
@@ -488,29 +483,23 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
         <div style={{padding:"16px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic",background:C.surface,border:`1px solid ${C.border}`,borderTop:"none"}}>No products in launch queue. Add one above.</div>
       ):(
         <div style={{border:`1px solid ${C.border}`,borderTop:"none"}}>
-          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
-            <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/>
+          <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px auto 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
+            <div>PRODUCT</div><div>SKU</div><div/><div/>
           </div>
           {launches.map(l=>{
-            const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
-            const allDone=done===LAUNCH_CHECKS.length;
             return(
-              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:allDone?"#f0fff4":"transparent",transition:"background 0.15s"}}
-                onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
+              <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px auto 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:"transparent",transition:"background 0.15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
                 <div>
-                  <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
-                  <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text}}>{l.name}</div>
                 </div>
                 <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
-                {LAUNCH_CHECKS.map(k=>(
-                  <div key={k} style={{display:"flex",justifyContent:"center"}}>
-                    <input type="checkbox" checked={l.checks[k]} onChange={()=>toggle(l.id,k)} style={{width:16,height:16,cursor:"pointer",accentColor:C.navy}}/>
-                  </div>
-                ))}
+                <button onClick={()=>onComplete(l)} style={{background:C.green,border:"none",color:"#fff",padding:"5px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}
+                  onMouseEnter={x=>{x.currentTarget.style.opacity="0.85";}} onMouseLeave={x=>{x.currentTarget.style.opacity="1";}}>COMPLETE</button>
                 <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
                   onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
                   onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
-              </div>
+  </div>
             );
           })}
         </div>

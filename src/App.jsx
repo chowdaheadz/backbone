@@ -868,7 +868,7 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories}){
       {dashMsg&&<div style={{background:"#f0f1f4",padding:"12px 20px",marginBottom:22,display:"flex",alignItems:"center",gap:14,borderLeft:`4px solid ${C.red}`}}>
         <span style={{fontSize:10,fontWeight:700,letterSpacing:2,color:C.red,flexShrink:0}}>NOTICE</span>
         <span style={{width:1,height:14,background:`${C.navy}33`,flexShrink:0,display:"inline-block"}}/>
-        <span style={{fontSize:13,color:C.navy,lineHeight:1.5}}>{dashMsg.text}</span>
+        <span style={{fontSize:17,color:C.navy,lineHeight:1.5}}>{dashMsg.text}</span>
       </div>}
       <div style={{display:"flex",gap:16,marginBottom:30}}>
         <SC label="TOTAL TASKS"  value={stats.total}    color={C.navy}/>

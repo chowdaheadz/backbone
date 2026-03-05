@@ -113,6 +113,7 @@ function SC({label,value,color,sub}){return<div style={{background:C.surface,bor
 const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],images:t.images??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
+const ideaFromDb=i=>({id:i.id,title:i.title,description:i.description??'',category:i.category??'General',createdBy:i.created_by,createdAt:i.created_at});
 const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{Desc:r.check_desc,Tags:r.check_tags,Images:r.check_images,AR4:r.check_ar4,Sirv:r.check_sirv,Linx:r.check_linx,Linx2:r.check_linx2}});
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -138,13 +139,15 @@ export default function App(){
   const[messages,setMessages]=useState([]);
   const[dashMsg,setDashMsg]=useState(null);
   const[imgReady,setImgReady]=useState(false);
+  const[ideas,setIdeas]=useState([]);
+  const[ideaReady,setIdeaReady]=useState(false);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
     async function load(){
-      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes]=await Promise.all([
+      const[empRes,taskRes,recRes,goalRes,skuRes,msgRes,launchRes,catRes,ideaRes]=await Promise.all([
         supabase.from('employees').select('*').order('id'),
         supabase.from('tasks').select('*').order('id'),
         supabase.from('recurring').select('*').order('id'),
@@ -153,6 +156,7 @@ export default function App(){
         supabase.from('messages').select('*').order('id'),
         supabase.from('product_launches').select('*').order('id'),
         supabase.from('categories').select('*').order('id'),
+        supabase.from('ideas').select('*').order('id'),
       ]);
       [empRes,taskRes,recRes,goalRes,skuRes].forEach((r,i)=>r.error&&console.error('[backbone] load error table',i,r.error));
       const loadedEmps=empRes.data??[];
@@ -180,6 +184,7 @@ export default function App(){
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
       if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
+      if(!ideaRes.error){setIdeas((ideaRes.data??[]).map(ideaFromDb));setIdeaReady(true);}
       const imgCheck=await supabase.from('tasks').select('images').limit(1);
       if(!imgCheck.error)setImgReady(true);
       setLoading(false);
@@ -245,6 +250,11 @@ export default function App(){
   };
   const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));dbW('updGoal',await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id));};
   const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));dbW('delGoal',await supabase.from('goals').delete().eq('id',id));};
+
+  const addIdea=async i=>{const res=await supabase.from('ideas').insert({title:i.title,description:i.description,category:i.category,created_by:user.id,created_at:t0}).select().single();dbW('addIdea',res);if(res.data)setIdeas(p=>[...p,ideaFromDb(res.data)]);};
+  const updIdea=async i=>{setIdeas(p=>p.map(x=>x.id===i.id?i:x));dbW('updIdea',await supabase.from('ideas').update({title:i.title,description:i.description,category:i.category}).eq('id',i.id));};
+  const delIdea=async id=>{setIdeas(p=>p.filter(i=>i.id!==id));dbW('delIdea',await supabase.from('ideas').delete().eq('id',id));};
+  const ideaToTask=i=>{setNewT({...blank,title:i.title,description:i.description,category:categories.includes(i.category)?i.category:"General"});};
 
   const incSku=async id=>{
     const counter=skuCounters.find(c=>c.id===id);
@@ -401,6 +411,7 @@ export default function App(){
           <NB label="CALENDAR"   active={view==="calendar"}   onClick={()=>setView("calendar")}/>
           {canEdit&&<NB label="↻ RECURRING" active={view==="recurring"} onClick={()=>setView("recurring")}/>}
           <NB label="GOALS" active={view==="goals"} onClick={()=>setView("goals")}/>
+          <NB label="IDEAS" active={view==="ideas"} onClick={()=>setView("ideas")}/>
           <NB label="SKU" active={view==="sku"} onClick={()=>setView("sku")}/>
           {isAdmin&&<NB label="⚙ ADMIN"     active={view==="admin"}     onClick={()=>setView("admin")}/>}
         </div>
@@ -422,6 +433,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
+        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
@@ -1270,6 +1282,104 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask}){
+  const blankDraft={title:"",description:"",category:"General"};
+  const[form,setForm]=useState(blankDraft);
+  const[editing,setEditing]=useState({});// id -> draft object
+  const doAdd=()=>{if(!form.title.trim())return;onAdd({...form});setForm(blankDraft);};
+  const startEdit=i=>setEditing(e=>({...e,[i.id]:{title:i.title,description:i.description,category:i.category}}));
+  const cancelEdit=id=>setEditing(e=>{const n={...e};delete n[id];return n;});
+  const saveEdit=i=>{const d=editing[i.id];if(!d||!d.title.trim())return;onUpd({...i,...d});cancelEdit(i.id);};
+  return(
+    <div style={{width:"100%"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+        <div style={{fontSize:11,color:C.textMuted,letterSpacing:3,fontWeight:700}}>IDEAS</div>
+        <span style={{background:C.blue+"18",color:C.blue,border:`1px solid ${C.blue}44`,padding:"2px 10px",fontSize:10,fontWeight:700,letterSpacing:1}}>{ideas.length} idea{ideas.length!==1?"s":""}</span>
+      </div>
+      {!ready&&(
+        <div style={{padding:"12px 16px",background:"#fffbf0",border:`1px solid ${C.orange}33`,borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text,lineHeight:1.7,marginBottom:20}}>
+          <strong style={{color:C.orange}}>Ideas table not set up.</strong> Run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{`create table public.ideas (
+  id bigint generated always as identity primary key,
+  title text not null,
+  description text default '',
+  category text default 'General',
+  created_by int,
+  created_at date
+);
+alter table public.ideas enable row level security;
+create policy "Allow all" on public.ideas for all using (true) with check (true);`}</pre>
+        </div>
+      )}
+      {/* Add form */}
+      {ready&&(
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:24,boxShadow:"0 1px 4px #0c123010"}}>
+          <div style={{background:C.navy,padding:"11px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>+ NEW IDEA</div>
+          <div style={{padding:"16px 20px",display:"grid",gap:12}}>
+            <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>TITLE *</div>
+              <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="What's the idea?" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+            <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>DESCRIPTION</div>
+              <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={2} placeholder="Details, context, reasoning..." style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/></div>
+            <div style={{display:"flex",gap:12,alignItems:"flex-end"}}>
+              <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>CATEGORY</div>
+                <select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} style={{background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 10px",fontFamily:"inherit",fontSize:12}}>
+                  {categories.map(c=><option key={c}>{c}</option>)}
+                </select></div>
+              <button onClick={doAdd} disabled={!form.title.trim()} style={{background:form.title.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 22px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:form.title.trim()?"pointer":"default",letterSpacing:1}}>ADD IDEA</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Idea cards */}
+      {ideas.length===0&&ready&&<div style={{color:C.textMuted,fontSize:13,textAlign:"center",padding:40}}>No ideas yet. Add one above.</div>}
+      <div style={{display:"grid",gap:12}}>
+        {ideas.map(idea=>{
+          const ed=editing[idea.id];
+          return(
+            <div key={idea.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`4px solid ${C.blue}`,boxShadow:"0 1px 4px #0c123010"}}>
+              {ed?(
+                <div style={{padding:"16px 20px",display:"grid",gap:10}}>
+                  <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>TITLE</div>
+                    <input value={ed.title} onChange={e=>setEditing(x=>({...x,[idea.id]:{...ed,title:e.target.value}}))} style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
+                  <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>DESCRIPTION</div>
+                    <textarea value={ed.description} onChange={e=>setEditing(x=>({...x,[idea.id]:{...ed,description:e.target.value}}))} rows={3} style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"8px 12px",fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/></div>
+                  <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                    <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>CATEGORY</div>
+                      <select value={ed.category} onChange={e=>setEditing(x=>({...x,[idea.id]:{...ed,category:e.target.value}}))} style={{background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"7px 10px",fontFamily:"inherit",fontSize:12}}>
+                        {categories.map(c=><option key={c}>{c}</option>)}
+                      </select></div>
+                    <div style={{display:"flex",gap:8,marginTop:16}}>
+                      <button onClick={()=>saveEdit(idea)} style={{background:C.green,border:"none",color:"#fff",padding:"7px 18px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>SAVE</button>
+                      <button onClick={()=>cancelEdit(idea.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"7px 14px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>CANCEL</button>
+                    </div>
+                  </div>
+                </div>
+              ):(
+                <div style={{padding:"14px 20px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:700,color:C.navy,marginBottom:6}}>{idea.title}</div>
+                      {idea.description&&<div style={{fontSize:13,color:C.text,lineHeight:1.6,marginBottom:10}}>{idea.description}</div>}
+                      <span style={{background:C.blue+"18",color:C.blue,border:`1px solid ${C.blue}33`,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:1}}>{idea.category}</span>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0,marginTop:2}}>
+                      <button onClick={()=>onToTask(idea)} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}>→ SEND TO TASK</button>
+                      <button onClick={()=>startEdit(idea)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"6px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>EDIT</button>
+                      <button onClick={()=>onDel(idea.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"6px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer"}}
+                        onMouseEnter={x=>{x.currentTarget.style.background=C.red+"18";x.currentTarget.style.color=C.red;x.currentTarget.style.borderColor=C.red+"66";}}
+                        onMouseLeave={x=>{x.currentTarget.style.background="none";x.currentTarget.style.color=C.textMuted;x.currentTarget.style.borderColor=C.border;}}>✕</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

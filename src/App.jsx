@@ -1336,7 +1336,7 @@ create policy "Allow all" on public.ideas for all using (true) with check (true)
       )}
       {/* Idea cards */}
       {ideas.length===0&&ready&&<div style={{color:C.textMuted,fontSize:13,textAlign:"center",padding:40}}>No ideas yet. Add one above.</div>}
-      <div style={{display:"grid",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         {ideas.map(idea=>{
           const ed=editing[idea.id];
           return(

@@ -1324,6 +1324,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
 function IdeasPanel({ideas,ready,imgColMissing,categories,onAdd,onUpd,onDel,onToTask,onAddImg,onDelImg}){
   const blankDraft={title:"",description:"",category:"General"};
   const[form,setForm]=useState(blankDraft);
+  const[formOpen,setFormOpen]=useState(true);
   const[editing,setEditing]=useState({});// id -> draft object
   const[lightbox,setLightbox]=useState(null);
   const doAdd=()=>{if(!form.title.trim())return;onAdd({...form});setForm(blankDraft);};
@@ -1361,8 +1362,11 @@ create policy "Allow all" on public.ideas for all using (true) with check (true)
       {/* Add form */}
       {ready&&(
         <div style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:24,boxShadow:"0 1px 4px #0c123010"}}>
-          <div style={{background:C.navy,padding:"11px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2}}>+ NEW IDEA</div>
-          <div style={{padding:"16px 20px",display:"grid",gap:12}}>
+          <div onClick={()=>setFormOpen(o=>!o)} style={{background:C.navy,padding:"11px 20px",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none"}}>
+            <span>+ NEW IDEA</span>
+            <span style={{fontSize:14,opacity:0.7,fontWeight:400}}>{formOpen?"▲":"▼"}</span>
+          </div>
+          {formOpen&&<div style={{padding:"16px 20px",display:"grid",gap:12}}>
             <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>TITLE *</div>
               <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="What's the idea?" style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13,boxSizing:"border-box"}}/></div>
             <div><div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:700}}>DESCRIPTION</div>
@@ -1374,7 +1378,7 @@ create policy "Allow all" on public.ideas for all using (true) with check (true)
                 </select></div>
               <button onClick={doAdd} disabled={!form.title.trim()} style={{background:form.title.trim()?C.red:C.textMuted,border:"none",color:"#fff",padding:"9px 22px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:form.title.trim()?"pointer":"default",letterSpacing:1}}>ADD IDEA</button>
             </div>
-          </div>
+          </div>}
         </div>
       )}
       {/* Idea cards */}

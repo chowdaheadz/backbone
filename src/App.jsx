@@ -113,7 +113,7 @@ function SC({label,value,color,sub}){return<div style={{background:C.surface,bor
 const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],images:t.images??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
-const ideaFromDb=i=>({id:i.id,title:i.title,description:i.description??'',category:i.category??'General',createdBy:i.created_by,createdAt:i.created_at});
+const ideaFromDb=i=>({id:i.id,title:i.title,description:i.description??'',category:i.category??'General',images:i.images??[],createdBy:i.created_by,createdAt:i.created_at});
 const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{Desc:r.check_desc,Tags:r.check_tags,Images:r.check_images,AR4:r.check_ar4,Sirv:r.check_sirv,Linx:r.check_linx,Linx2:r.check_linx2}});
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -231,7 +231,7 @@ export default function App(){
   };
 
   const crtTask=async d=>{
-    const res=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[],images:[]}).select().single();
+    const res=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[],images:d.images??[]}).select().single();
     dbW('crtTask',res);
     if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
     setNewT(null);
@@ -251,10 +251,12 @@ export default function App(){
   const updGoal=async g=>{setGoals(p=>p.map(x=>x.id===g.id?g:x));dbW('updGoal',await supabase.from('goals').update({text:g.text,status:g.status}).eq('id',g.id));};
   const delGoal=async id=>{setGoals(p=>p.filter(g=>g.id!==id));dbW('delGoal',await supabase.from('goals').delete().eq('id',id));};
 
-  const addIdea=async i=>{const res=await supabase.from('ideas').insert({title:i.title,description:i.description,category:i.category,created_by:user.id,created_at:t0}).select().single();dbW('addIdea',res);if(res.data)setIdeas(p=>[...p,ideaFromDb(res.data)]);};
-  const updIdea=async i=>{setIdeas(p=>p.map(x=>x.id===i.id?i:x));dbW('updIdea',await supabase.from('ideas').update({title:i.title,description:i.description,category:i.category}).eq('id',i.id));};
+  const addIdea=async i=>{const res=await supabase.from('ideas').insert({title:i.title,description:i.description,category:i.category,images:[],created_by:user.id,created_at:t0}).select().single();dbW('addIdea',res);if(res.data)setIdeas(p=>[...p,ideaFromDb(res.data)]);};
+  const updIdea=async i=>{setIdeas(p=>p.map(x=>x.id===i.id?i:x));dbW('updIdea',await supabase.from('ideas').update({title:i.title,description:i.description,category:i.category,images:i.images??[]}).eq('id',i.id));};
   const delIdea=async id=>{setIdeas(p=>p.filter(i=>i.id!==id));dbW('delIdea',await supabase.from('ideas').delete().eq('id',id));};
-  const ideaToTask=i=>{setNewT({...blank,title:i.title,description:i.description,category:categories.includes(i.category)?i.category:"General"});};
+  const addIdeaImg=(id,img)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:[...(i.images||[]),img]};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>dbW('addIdeaImg',r));return u;}));};
+  const delIdeaImg=(id,imgId)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:(i.images||[]).filter(x=>x.id!==imgId)};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>dbW('delIdeaImg',r));return u;}));};
+  const ideaToTask=i=>{setNewT({...blank,title:i.title,description:i.description,category:categories.includes(i.category)?i.category:"General",images:i.images??[]});};
 
   const incSku=async id=>{
     const counter=skuCounters.find(c=>c.id===id);
@@ -433,7 +435,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask}/>}
+        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask} onAddImg={addIdeaImg} onDelImg={delIdeaImg}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
@@ -1286,10 +1288,11 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
   );
 }
 
-function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask}){
+function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask,onAddImg,onDelImg}){
   const blankDraft={title:"",description:"",category:"General"};
   const[form,setForm]=useState(blankDraft);
   const[editing,setEditing]=useState({});// id -> draft object
+  const[lightbox,setLightbox]=useState(null);
   const doAdd=()=>{if(!form.title.trim())return;onAdd({...form});setForm(blankDraft);};
   const startEdit=i=>setEditing(e=>({...e,[i.id]:{title:i.title,description:i.description,category:i.category}}));
   const cancelEdit=id=>setEditing(e=>{const n={...e};delete n[id];return n;});
@@ -1308,6 +1311,7 @@ function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask}){
   title text not null,
   description text default '',
   category text default 'General',
+  images jsonb default '[]'::jsonb,
   created_by int,
   created_at date
 );
@@ -1359,20 +1363,38 @@ create policy "Allow all" on public.ideas for all using (true) with check (true)
                   </div>
                 </div>
               ):(
-                <div style={{padding:"14px 20px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:14,fontWeight:700,color:C.navy,marginBottom:6}}>{idea.title}</div>
-                      {idea.description&&<div style={{fontSize:13,color:C.text,lineHeight:1.6,marginBottom:10}}>{idea.description}</div>}
-                      <span style={{background:C.blue+"18",color:C.blue,border:`1px solid ${C.blue}33`,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:1}}>{idea.category}</span>
+                <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.navy}}>{idea.title}</div>
+                  {idea.description&&<div style={{fontSize:12,color:C.text,lineHeight:1.5}}>{idea.description}</div>}
+                  {(idea.images||[]).length>0&&(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {idea.images.map(img=>(
+                        <div key={img.id} style={{position:"relative"}}>
+                          <img src={img.data} alt={img.name} onClick={()=>setLightbox(img)} style={{width:56,height:40,objectFit:"cover",border:`1px solid ${C.border}`,cursor:"zoom-in",display:"block",borderRadius:2}}/>
+                          <button onClick={()=>onDelImg(idea.id,img.id)} style={{position:"absolute",top:-5,right:-5,background:C.red,border:"none",color:"#fff",width:16,height:16,borderRadius:"50%",cursor:"pointer",fontSize:9,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{display:"flex",gap:6,flexShrink:0,marginTop:2}}>
-                      <button onClick={()=>onToTask(idea)} style={{background:C.navy,border:"none",color:"#fff",padding:"6px 14px",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}>→ SEND TO TASK</button>
-                      <button onClick={()=>startEdit(idea)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"6px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>EDIT</button>
-                      <button onClick={()=>onDel(idea.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"6px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer"}}
-                        onMouseEnter={x=>{x.currentTarget.style.background=C.red+"18";x.currentTarget.style.color=C.red;x.currentTarget.style.borderColor=C.red+"66";}}
-                        onMouseLeave={x=>{x.currentTarget.style.background="none";x.currentTarget.style.color=C.textMuted;x.currentTarget.style.borderColor=C.border;}}>✕</button>
-                    </div>
+                  )}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+                    <span style={{background:C.blue+"18",color:C.blue,border:`1px solid ${C.blue}33`,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:1}}>{idea.category}</span>
+                    <label style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"4px 9px",fontFamily:"inherit",fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:1}}>
+                      + IMG
+                      <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                        const file=e.target.files?.[0];if(!file)return;
+                        if(file.size>5*1024*1024){alert("Image must be under 5 MB.");e.target.value="";return;}
+                        const reader=new FileReader();
+                        reader.onload=ev=>onAddImg(idea.id,{id:Date.now(),name:file.name,data:ev.target.result});
+                        reader.readAsDataURL(file);e.target.value="";
+                      }}/>
+                    </label>
+                  </div>
+                  <div style={{display:"flex",gap:6,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
+                    <button onClick={()=>onToTask(idea)} style={{flex:1,background:C.red,border:"none",color:"#fff",padding:"7px 0",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>→ SEND TO TASK</button>
+                    <button onClick={()=>startEdit(idea)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"7px 12px",fontFamily:"inherit",fontSize:11,cursor:"pointer",fontWeight:700}}>EDIT</button>
+                    <button onClick={()=>onDel(idea.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,padding:"7px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer"}}
+                      onMouseEnter={x=>{x.currentTarget.style.background=C.red+"18";x.currentTarget.style.color=C.red;x.currentTarget.style.borderColor=C.red+"66";}}
+                      onMouseLeave={x=>{x.currentTarget.style.background="none";x.currentTarget.style.color=C.textMuted;x.currentTarget.style.borderColor=C.border;}}>✕</button>
                   </div>
                 </div>
               )}
@@ -1380,6 +1402,16 @@ create policy "Allow all" on public.ideas for all using (true) with check (true)
           );
         })}
       </div>
+      {lightbox&&(
+        <div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setLightbox(null)}>
+          <div style={{position:"absolute",top:16,right:16,display:"flex",gap:8}}>
+            <a href={lightbox.data} download={lightbox.name} onClick={e=>e.stopPropagation()} style={{background:C.navy,color:"#fff",padding:"7px 16px",fontFamily:"inherit",fontSize:12,fontWeight:700,letterSpacing:1,textDecoration:"none",cursor:"pointer"}}>⬇ DOWNLOAD</a>
+            <button onClick={()=>setLightbox(null)} style={{background:"none",border:"1px solid #ffffff55",color:"#fff",padding:"7px 14px",fontFamily:"inherit",cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          <img src={lightbox.data} alt={lightbox.name} style={{maxWidth:"90vw",maxHeight:"85vh",objectFit:"contain",boxShadow:"0 8px 40px #000"}} onClick={e=>e.stopPropagation()}/>
+          <div style={{color:"#ffffffaa",fontSize:12,marginTop:10}}>{lightbox.name}</div>
+        </div>
+      )}
     </div>
   );
 }

@@ -110,7 +110,7 @@ function SH({label,color,count}){return<div style={{fontSize:11,fontWeight:700,c
 function SC({label,value,color,sub}){return<div style={{background:C.surface,border:`1px solid ${C.border}`,padding:"10px 16px",flex:1,borderTop:`3px solid ${color}`,boxShadow:"0 1px 6px #0c123014"}}><div style={{fontSize:20,fontWeight:900,color,lineHeight:1}}>{value}</div><div style={{fontSize:10,color:C.navy,letterSpacing:1,marginTop:4,fontWeight:700}}>{label}</div>{sub&&<div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{sub}</div>}</div>;}
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
-const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],recurringId:t.recurring_id});
+const taskFromDb=t=>({id:t.id,title:t.title,category:t.category,priority:t.priority,status:t.status,assignee:t.assignee,dueDate:t.due_date,createdBy:t.created_by,description:t.description,subtasks:t.subtasks??[],comments:t.comments??[],images:t.images??[],recurringId:t.recurring_id});
 const recFromDb=r=>({id:r.id,title:r.title,category:r.category,priority:r.priority,assignee:r.assignee,description:r.description,frequency:r.frequency,dayOfWeek:r.day_of_week,dayOfMonth:r.day_of_month,active:r.active,nextDue:r.next_due,createdBy:r.created_by});
 const goalFromDb=g=>({id:g.id,empId:g.emp_id,text:g.text,status:g.status});
 const launchFromDb=r=>({id:r.id,name:r.name,sku:r.sku,checks:{Desc:r.check_desc,Tags:r.check_tags,Images:r.check_images,AR4:r.check_ar4,Sirv:r.check_sirv,Linx:r.check_linx,Linx2:r.check_linx2}});
@@ -137,6 +137,7 @@ export default function App(){
   const[catReady,setCatReady]=useState(false);
   const[messages,setMessages]=useState([]);
   const[dashMsg,setDashMsg]=useState(null);
+  const[imgReady,setImgReady]=useState(false);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
@@ -179,6 +180,8 @@ export default function App(){
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
       if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
+      const imgCheck=await supabase.from('tasks').select('images').limit(1);
+      if(!imgCheck.error)setImgReady(true);
       setLoading(false);
     }
     load();
@@ -204,7 +207,7 @@ export default function App(){
   const handleTaskSave=async updated=>{
     setTasks(p=>p.map(t=>t.id===updated.id?updated:t));
     setModal(m=>m&&m.id===updated.id?updated:m);
-    dbW('updateTask',await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments}).eq('id',updated.id));
+    dbW('updateTask',await supabase.from('tasks').update({title:updated.title,category:updated.category,priority:updated.priority,status:updated.status,assignee:updated.assignee,due_date:updated.dueDate,description:updated.description,subtasks:updated.subtasks,comments:updated.comments,images:updated.images??[]}).eq('id',updated.id));
     if(updated.recurringId&&updated.status==="Done"){
       setRecurring(p=>p.map(r=>{
         if(r.id!==updated.recurringId)return r;
@@ -223,7 +226,7 @@ export default function App(){
   };
 
   const crtTask=async d=>{
-    const res=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[]}).select().single();
+    const res=await supabase.from('tasks').insert({title:d.title,category:d.category,priority:d.priority,status:d.status,assignee:d.assignee,due_date:d.dueDate,created_by:d.createdBy,description:d.description,subtasks:d.subtasks??[],comments:[],images:[]}).select().single();
     dbW('crtTask',res);
     if(res.data)setTasks(p=>[...p,taskFromDb(res.data)]);
     setNewT(null);
@@ -232,6 +235,8 @@ export default function App(){
   const addCom=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,comments:[...t.comments,{id:nextCid++,author:user.id,text,date:t0}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({comments:u.comments}).eq('id',tid).then(r=>dbW('addCom',r));return u;}));};
   const togSub=(tid,sid)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:t.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid).then(r=>dbW('togSub',r));return u;}));};
   const addSub=(tid,text)=>{if(!text.trim())return;setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,subtasks:[...t.subtasks,{id:nextSid++,text,done:false}]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({subtasks:u.subtasks}).eq('id',tid).then(r=>dbW('addSub',r));return u;}));};
+  const addImg=(tid,img)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,images:[...(t.images||[]),img]};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({images:u.images}).eq('id',tid).then(r=>dbW('addImg',r));return u;}));};
+  const delImg=(tid,imgId)=>{setTasks(p=>p.map(t=>{if(t.id!==tid)return t;const u={...t,images:(t.images||[]).filter(i=>i.id!==imgId)};setModal(m=>m?.id===tid?u:m);supabase.from('tasks').update({images:u.images}).eq('id',tid).then(r=>dbW('delImg',r));return u;}));};
 
   const addGoal=async g=>{
     const res=await supabase.from('goals').insert({emp_id:g.empId,text:g.text,status:g.status}).select().single();
@@ -421,7 +426,7 @@ export default function App(){
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
 
-      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} canEdit={canEdit} categories={categories}/>}
+      {modal&&<TaskModal task={tasks.find(t=>t.id===modal.id)||modal} emps={emps} recurring={recurring} onClose={()=>setModal(null)} onSave={handleTaskSave} onDel={delTask} onComment={addCom} onTogSub={togSub} onAddSub={addSub} onAddImg={addImg} onDelImg={delImg} imgReady={imgReady} canEdit={canEdit} categories={categories}/>}
       {newT&&<NewTaskModal task={newT} emps={emps} onChange={setNewT} onCreate={crtTask} onClose={()=>setNewT(null)} categories={categories}/>}
     </div>
   );
@@ -971,7 +976,7 @@ function CalView({tasks,month,setMonth,onOpen,categories}){
 }
 
 // ── Task Modal ────────────────────────────────────────────────────────────────
-function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,canEdit,categories}){
+function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,onAddSub,onAddImg,onDelImg,imgReady,canEdit,categories}){
   const[ed,setEd]=useState(false);
   const[dr,setDr]=useState(null);
   const[ct,setCt]=useState("");
@@ -1029,9 +1034,10 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
           )}
 
           <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,marginBottom:20}}>
-            {["details","subtasks","comments"].map(t=>(
+            {["details","subtasks","comments","images"].map(t=>(
               <button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?`3px solid ${accent}`:"3px solid transparent",color:tab===t?accent:C.textMuted,padding:"8px 20px",fontFamily:"inherit",fontSize:12,cursor:"pointer",letterSpacing:1,fontWeight:700,marginBottom:-2}}>
                 {t.toUpperCase()}{t==="comments"&&task.comments.length>0?` (${task.comments.length})`:""}{t==="subtasks"&&task.subtasks?.length>0?` (${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length})`:""}
+                {t==="images"&&(task.images||[]).length>0?` (${(task.images||[]).length})`:""}
               </button>
             ))}
           </div>
@@ -1039,6 +1045,40 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
           {tab==="details"&&<div><div style={{fontSize:11,color:C.textMuted,marginBottom:8,fontWeight:700,letterSpacing:1}}>DESCRIPTION</div>{ed?<textarea value={dr.description} onChange={e=>setDr({...dr,description:e.target.value})} rows={4} style={{width:"100%",background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:10,fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>:<div style={{color:C.text,fontSize:13,lineHeight:1.7,background:C.card,padding:14,minHeight:80,border:`1px solid ${C.border}`}}>{task.description||<span style={{color:C.textMuted}}>No description.</span>}</div>}</div>}
           {tab==="subtasks"&&<div>{(task.subtasks||[]).map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.border}`}}><input type="checkbox" checked={s.done} onChange={()=>onTogSub(task.id,s.id)} style={{accentColor:accent,width:16,height:16,cursor:"pointer"}}/><span style={{fontSize:13,color:s.done?C.textMuted:C.text,textDecoration:s.done?"line-through":"none"}}>{s.text}</span></div>)}{canEdit&&<div style={{display:"flex",gap:8,marginTop:14}}><input value={ns} onChange={e=>setNs(e.target.value)} placeholder="Add a subtask..." onKeyDown={e=>{if(e.key==="Enter"){onAddSub(task.id,ns);setNs("");}}} style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13}}/><button onClick={()=>{onAddSub(task.id,ns);setNs("");}} style={{background:C.navy,border:"none",color:"#fff",padding:"9px 18px",fontFamily:"inherit",fontSize:12,cursor:"pointer",fontWeight:700}}>ADD</button></div>}</div>}
           {tab==="comments"&&<div>{task.comments.length===0&&<div style={{color:C.textMuted,fontSize:13,marginBottom:14}}>No comments yet.</div>}{task.comments.map(c=>{const a=emps.find(e=>e.id===c.author);return<div key={c.id} style={{display:"flex",gap:12,marginBottom:16}}><Av u={a} size={32}/><div style={{flex:1}}><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:5}}><span style={{fontSize:13,color:C.navy,fontWeight:700}}>{a?.name}</span><span style={{fontSize:11,color:C.textMuted}}>{fmtS(c.date)}</span></div><div style={{fontSize:13,color:C.text,background:C.card,padding:"10px 14px",border:`1px solid ${C.border}`,lineHeight:1.6}}>{c.text}</div></div></div>;})}<div style={{display:"flex",gap:8,marginTop:10}}><input value={ct} onChange={e=>setCt(e.target.value)} placeholder="Add a comment..." onKeyDown={e=>{if(e.key==="Enter"){onComment(task.id,ct);setCt("");}}} style={{flex:1,background:C.card,border:`1.5px solid ${C.border}`,color:C.text,padding:"9px 12px",fontFamily:"inherit",fontSize:13}}/><button onClick={()=>{onComment(task.id,ct);setCt("");}} style={{background:accent,border:"none",color:"#fff",padding:"9px 20px",fontFamily:"inherit",fontSize:12,cursor:"pointer",fontWeight:700}}>POST</button></div></div>}
+          {tab==="images"&&(
+            <div>
+              {!imgReady&&(
+                <div style={{padding:"12px 14px",background:"#fffbf0",border:`1px solid ${C.orange}33`,borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text,lineHeight:1.7,marginBottom:16}}>
+                  <strong style={{color:C.orange}}>Images column not set up.</strong> Run this SQL in your <strong>Supabase dashboard → SQL Editor</strong>:
+                  <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{"alter table public.tasks add column if not exists images jsonb default '[]'::jsonb;"}</pre>
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+                {(task.images||[]).map(img=>(
+                  <div key={img.id} style={{position:"relative",border:`1px solid ${C.border}`,background:C.card}}>
+                    <img src={img.data} alt={img.name} style={{width:"100%",display:"block",maxHeight:160,objectFit:"cover"}}/>
+                    <div style={{padding:"4px 8px",fontSize:10,color:C.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{img.name}</div>
+                    {canEdit&&<button onClick={()=>onDelImg(task.id,img.id)} style={{position:"absolute",top:4,right:4,background:C.red,border:"none",color:"#fff",width:22,height:22,cursor:"pointer",fontSize:12,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                  </div>
+                ))}
+                {(task.images||[]).length===0&&<div style={{color:C.textMuted,fontSize:13,gridColumn:"1/-1"}}>No images attached.</div>}
+              </div>
+              {canEdit&&imgReady&&(
+                <label style={{display:"inline-block",background:C.navy,color:"#fff",padding:"9px 20px",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700,letterSpacing:1}}>
+                  + ATTACH IMAGE
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                    const file=e.target.files?.[0];
+                    if(!file)return;
+                    if(file.size>5*1024*1024){alert("Image must be under 5 MB.");e.target.value="";return;}
+                    const reader=new FileReader();
+                    reader.onload=ev=>onAddImg(task.id,{id:Date.now(),name:file.name,data:ev.target.result});
+                    reader.readAsDataURL(file);
+                    e.target.value="";
+                  }}/>
+                </label>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -436,7 +436,7 @@ export default function App(){
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
         {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask} onAddImg={addIdeaImg} onDelImg={delIdeaImg}/>}
-        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch}/></div>}
+        {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch} onToTask={l=>setNewT({...blank,title:`${l.name} - Verify`,dueDate:t0})}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
 
@@ -479,7 +479,7 @@ function SkuPanel({counters,onInc,onDec}){
 
 // ── Product Launch Panel ───────────────────────────────────────────────────────
 const LAUNCH_CHECKS=["Desc","Tags","Images","AR4","Sirv","Linx","Linx2"];
-function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
+function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
   const add=()=>{
@@ -518,7 +518,9 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle}){
                 onMouseEnter={e=>{if(!allDone)e.currentTarget.style.background=C.card;}} onMouseLeave={e=>{if(!allDone)e.currentTarget.style.background="transparent";}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
-                  <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>
+                  {allDone
+                    ?<button onClick={e=>{e.stopPropagation();onToTask(l);}} style={{marginTop:4,background:C.red,border:"none",color:"#fff",padding:"3px 10px",fontFamily:"inherit",fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:1}}>→ SEND AS TASK</button>
+                    :<div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>}
                 </div>
                 <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
                 {LAUNCH_CHECKS.map(k=>(

@@ -982,6 +982,7 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
   const[ct,setCt]=useState("");
   const[ns,setNs]=useState("");
   const[tab,setTab]=useState("details");
+  const[lightbox,setLightbox]=useState(null);
   if(!task)return null;
   const wt=ed?dr:task;
   const emp=emps.find(e=>e.id===task.assignee);
@@ -1055,9 +1056,11 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
               )}
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
                 {(task.images||[]).map(img=>(
-                  <div key={img.id} style={{position:"relative",border:`1px solid ${C.border}`,background:C.card}}>
-                    <img src={img.data} alt={img.name} style={{width:"100%",display:"block",maxHeight:160,objectFit:"cover"}}/>
-                    <div style={{padding:"4px 8px",fontSize:10,color:C.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{img.name}</div>
+                  <div key={img.id} style={{position:"relative",border:`1px solid ${C.border}`,background:"#f0f0f0"}}>
+                    <div style={{height:150,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"zoom-in"}} onClick={()=>setLightbox(img)}>
+                      <img src={img.data} alt={img.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                    </div>
+                    <div style={{padding:"4px 8px",fontSize:10,color:C.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",borderTop:`1px solid ${C.border}`}}>{img.name}</div>
                     {canEdit&&<button onClick={()=>onDelImg(task.id,img.id)} style={{position:"absolute",top:4,right:4,background:C.red,border:"none",color:"#fff",width:22,height:22,cursor:"pointer",fontSize:12,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
                   </div>
                 ))}
@@ -1077,6 +1080,16 @@ function TaskModal({task,emps,recurring,onClose,onSave,onDel,onComment,onTogSub,
                   }}/>
                 </label>
               )}
+            </div>
+          )}
+          {lightbox&&(
+            <div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setLightbox(null)}>
+              <div style={{position:"absolute",top:16,right:16,display:"flex",gap:8}}>
+                <a href={lightbox.data} download={lightbox.name} onClick={e=>e.stopPropagation()} style={{background:C.navy,color:"#fff",padding:"7px 16px",fontFamily:"inherit",fontSize:12,fontWeight:700,letterSpacing:1,textDecoration:"none",cursor:"pointer"}}>⬇ DOWNLOAD</a>
+                <button onClick={()=>setLightbox(null)} style={{background:"none",border:"1px solid #ffffff55",color:"#fff",padding:"7px 14px",fontFamily:"inherit",cursor:"pointer",fontSize:14}}>✕</button>
+              </div>
+              <img src={lightbox.data} alt={lightbox.name} style={{maxWidth:"90vw",maxHeight:"85vh",objectFit:"contain",boxShadow:"0 8px 40px #000"}} onClick={e=>e.stopPropagation()}/>
+              <div style={{color:"#ffffffaa",fontSize:12,marginTop:10}}>{lightbox.name}</div>
             </div>
           )}
         </div>

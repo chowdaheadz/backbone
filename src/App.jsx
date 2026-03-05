@@ -482,6 +482,7 @@ const LAUNCH_CHECKS=["Desc","Tags","Images","AR4","Sirv","Linx","Linx2"];
 function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
   const[name,setName]=useState("");
   const[sku,setSku]=useState("");
+  const[sentIds,setSentIds]=useState(()=>new Set());
   const add=()=>{
     if(!name.trim()||!sku.trim())return;
     onAdd({name:name.trim(),sku:sku.trim()});
@@ -489,6 +490,9 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
   };
   const toggle=onToggle;
   const remove=onRemove;
+  const sendAsTask=l=>{setSentIds(p=>new Set([...p,l.id]));onToTask(l);};
+  const pending=launches.filter(l=>!sentIds.has(l.id));
+  const sent=launches.filter(l=>sentIds.has(l.id));
   return(
     <div>
       <div style={{background:C.navy,padding:"10px 16px",fontSize:11,color:"#ffffffaa",letterSpacing:3,fontWeight:700}}>PRODUCT LAUNCH</div>
@@ -510,7 +514,8 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
           <div style={{background:C.card,padding:"7px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,fontSize:10,color:C.textMuted,letterSpacing:1,fontWeight:700,alignItems:"center"}}>
             <div>PRODUCT</div><div>SKU</div>{LAUNCH_CHECKS.map(k=><div key={k} style={{textAlign:"center"}}>{k}</div>)}<div/>
           </div>
-          {launches.map(l=>{
+          {pending.length===0&&<div style={{padding:"12px 14px",fontSize:12,color:C.textMuted,fontStyle:"italic"}}>All products sent as tasks.</div>}
+          {pending.map(l=>{
             const done=LAUNCH_CHECKS.filter(k=>l.checks[k]).length;
             const allDone=done===LAUNCH_CHECKS.length;
             return(
@@ -519,7 +524,7 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
                 <div>
                   <div style={{fontSize:13,fontWeight:700,color:allDone?C.green:C.text,textDecoration:allDone?"line-through":"none"}}>{l.name}</div>
                   {allDone
-                    ?<button onClick={e=>{e.stopPropagation();onToTask(l);}} style={{marginTop:4,background:C.red,border:"none",color:"#fff",padding:"3px 10px",fontFamily:"inherit",fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:1}}>→ SEND AS TASK</button>
+                    ?<button onClick={e=>{e.stopPropagation();sendAsTask(l);}} style={{marginTop:4,background:C.red,border:"none",color:"#fff",padding:"3px 10px",fontFamily:"inherit",fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:1}}>→ SEND AS TASK</button>
                     :<div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{done}/{LAUNCH_CHECKS.length} complete</div>}
                 </div>
                 <div style={{fontSize:12,fontFamily:"monospace",color:C.navy,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
@@ -534,6 +539,31 @@ function ProductLaunchPanel({launches,ready,onAdd,onRemove,onToggle,onToTask}){
               </div>
             );
           })}
+          {sent.length>0&&(
+            <>
+              <div style={{background:"#e8f5e9",padding:"6px 14px",borderTop:`2px solid ${C.green}`,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:2}}>COMPLETE</span>
+                <span style={{fontSize:10,color:C.green,opacity:0.7}}>{sent.length} task{sent.length>1?"s":""} sent</span>
+              </div>
+              {sent.map(l=>(
+                <div key={l.id} style={{padding:"9px 14px",display:"grid",gridTemplateColumns:"1fr 140px repeat(7,52px) 32px",gap:10,alignItems:"center",borderTop:`1px solid ${C.border}`,background:"#f8fff8",opacity:0.75}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.green,textDecoration:"line-through"}}>{l.name}</div>
+                    <div style={{fontSize:10,color:C.green,marginTop:1,fontStyle:"italic"}}>Task sent</div>
+                  </div>
+                  <div style={{fontSize:12,fontFamily:"monospace",color:C.textMuted,fontWeight:700,letterSpacing:1}}>{l.sku}</div>
+                  {LAUNCH_CHECKS.map(k=>(
+                    <div key={k} style={{display:"flex",justifyContent:"center"}}>
+                      <input type="checkbox" checked={l.checks[k]} disabled style={{width:16,height:16,accentColor:C.green}}/>
+                    </div>
+                  ))}
+                  <button onClick={()=>remove(l.id)} style={{background:"none",border:`1px solid ${C.border}`,color:C.textMuted,width:26,height:26,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}
+                    onMouseEnter={x=>{x.currentTarget.style.borderColor=C.red;x.currentTarget.style.color=C.red;}}
+                    onMouseLeave={x=>{x.currentTarget.style.borderColor=C.border;x.currentTarget.style.color=C.textMuted;}}>✕</button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

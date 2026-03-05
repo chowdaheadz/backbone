@@ -815,7 +815,7 @@ function MC({task,emps,onClick,highlight}){
   const od=task.dueDate&&new Date(task.dueDate)<today&&task.status!=="Done";
   return<div onClick={onClick} style={{background:C.surface,border:`1px solid ${highlight||C.border}`,padding:"10px 13px",marginBottom:8,cursor:"pointer",borderLeft:`4px solid ${PCOL[task.priority]}`,boxShadow:"0 1px 3px #0c123010"}}
     onMouseEnter={x=>x.currentTarget.style.background=C.card} onMouseLeave={x=>x.currentTarget.style.background=C.surface}>
-    <div style={{fontSize:12,fontWeight:600,marginBottom:5}}>{task.title}{task.recurringId&&<RecurBadge/>}</div>
+    <div style={{fontSize:12,fontWeight:600,marginBottom:5,display:"flex",alignItems:"center",gap:6}}>{task.title}{task.recurringId&&<RecurBadge/>}{task.images?.length>0&&<img src={task.images[0].data} alt="" style={{width:28,height:20,objectFit:"cover",borderRadius:2,border:`1px solid ${C.border}`,flexShrink:0}}/>}</div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <div style={{fontSize:11,color:od?C.red:C.textMuted,fontWeight:od?700:400}}>Due {fmtS(task.dueDate)}{od?" ⚠":""}</div>
       <div style={{display:"flex",alignItems:"center",gap:6}}><SB status={task.status}/>{e&&<Av u={e} size={20}/>}</div>
@@ -890,7 +890,7 @@ function ListView({tasks,emps,fSt,setFSt,fPr,setFPr,fAs,setFAs,fCa,setFCa,onOpen
               style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 130px 110px",padding:"13px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",borderLeft:`4px solid ${task.recurringId?C.purple:PCOL[task.priority]}`}}
               onMouseEnter={e=>e.currentTarget.style.background=C.card} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div>
-                <div style={{fontSize:13,fontWeight:600}}>{task.title}{task.recurringId&&<RecurBadge/>}</div>
+                <div style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>{task.title}{task.recurringId&&<RecurBadge/>}{task.images?.length>0&&<img src={task.images[0].data} alt="" style={{width:32,height:22,objectFit:"cover",borderRadius:2,border:`1px solid ${C.border}`,flexShrink:0}}/>}</div>
                 {task.subtasks?.length>0&&<div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{task.subtasks.filter(s=>s.done).length}/{task.subtasks.length} subtasks</div>}
               </div>
               <div style={{fontSize:12,color:C.textMuted,display:"flex",alignItems:"center"}}>{task.category}</div>

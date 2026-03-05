@@ -141,6 +141,7 @@ export default function App(){
   const[imgReady,setImgReady]=useState(false);
   const[ideas,setIdeas]=useState([]);
   const[ideaReady,setIdeaReady]=useState(false);
+  const[ideaImgColMissing,setIdeaImgColMissing]=useState(false);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
@@ -184,7 +185,7 @@ export default function App(){
       if(!msgRes.error){const msgs=msgRes.data??[];setMessages(msgs);if(msgs.length>0)setDashMsg(msgs[Math.floor(Math.random()*msgs.length)]);}
       if(!launchRes.error){setLaunches((launchRes.data??[]).map(launchFromDb));setLaunchReady(true);}
       if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
-      if(!ideaRes.error){setIdeas((ideaRes.data??[]).map(ideaFromDb));setIdeaReady(true);}
+      if(!ideaRes.error){const ideaData=ideaRes.data??[];setIdeas(ideaData.map(ideaFromDb));setIdeaReady(true);if(ideaData.length>0&&!('images' in ideaData[0]))setIdeaImgColMissing(true);}
       const imgCheck=await supabase.from('tasks').select('images').limit(1);
       if(!imgCheck.error)setImgReady(true);
       setLoading(false);
@@ -254,8 +255,8 @@ export default function App(){
   const addIdea=async i=>{const res=await supabase.from('ideas').insert({title:i.title,description:i.description,category:i.category,images:[],created_by:user.id,created_at:t0}).select().single();dbW('addIdea',res);if(res.data)setIdeas(p=>[...p,ideaFromDb(res.data)]);};
   const updIdea=async i=>{setIdeas(p=>p.map(x=>x.id===i.id?i:x));dbW('updIdea',await supabase.from('ideas').update({title:i.title,description:i.description,category:i.category,images:i.images??[]}).eq('id',i.id));};
   const delIdea=async id=>{setIdeas(p=>p.filter(i=>i.id!==id));dbW('delIdea',await supabase.from('ideas').delete().eq('id',id));};
-  const addIdeaImg=(id,img)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:[...(i.images||[]),img]};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>dbW('addIdeaImg',r));return u;}));};
-  const delIdeaImg=(id,imgId)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:(i.images||[]).filter(x=>x.id!==imgId)};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>dbW('delIdeaImg',r));return u;}));};
+  const addIdeaImg=(id,img)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:[...(i.images||[]),img]};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>{if(r.error?.message?.includes("'images'"))setIdeaImgColMissing(true);else dbW('addIdeaImg',r);});return u;}));};
+  const delIdeaImg=(id,imgId)=>{setIdeas(p=>p.map(i=>{if(i.id!==id)return i;const u={...i,images:(i.images||[]).filter(x=>x.id!==imgId)};supabase.from('ideas').update({images:u.images}).eq('id',id).then(r=>{if(r.error?.message?.includes("'images'"))setIdeaImgColMissing(true);else dbW('delIdeaImg',r);});return u;}));};
   const ideaToTask=i=>{setNewT({...blank,title:i.title,description:i.description,category:categories.includes(i.category)?i.category:"General",images:i.images??[]});};
 
   const incSku=async id=>{
@@ -435,7 +436,7 @@ export default function App(){
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
         {view==="goals"     &&<GoalsPanel emps={emps} goals={goals} onAdd={addGoal} onUpd={updGoal} onDel={delGoal}/>}
-        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask} onAddImg={addIdeaImg} onDelImg={delIdeaImg}/>}
+        {view==="ideas"     &&<IdeasPanel ideas={ideas} ready={ideaReady} imgColMissing={ideaImgColMissing} categories={categories} onAdd={addIdea} onUpd={updIdea} onDel={delIdea} onToTask={ideaToTask} onAddImg={addIdeaImg} onDelImg={delIdeaImg}/>}
         {view==="sku"       &&<div><SkuPanel counters={skuCounters} onInc={incSku} onDec={decSku}/><ProductLaunchPanel launches={launches} ready={launchReady} onAdd={addLaunch} onRemove={delLaunch} onToggle={togLaunch} onToTask={l=>setNewT({...blank,title:`${l.name} - Verify`,dueDate:t0})}/></div>}
         {view==="admin"     &&isAdmin&&<AdminPanel emps={emps} tasks={tasks} me={user} onAdd={addEmp} onDel={delEmp} onUpd={updEmp} messages={messages} onAddMsg={addMsg} onDelMsg={delMsg} categories={categories} catReady={catReady} onAddCat={addCategory} onDelCat={delCategory}/>}
       </div>
@@ -1320,7 +1321,7 @@ function AdminPanel({emps,tasks,me,onAdd,onDel,onUpd,messages,onAddMsg,onDelMsg,
   );
 }
 
-function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask,onAddImg,onDelImg}){
+function IdeasPanel({ideas,ready,imgColMissing,categories,onAdd,onUpd,onDel,onToTask,onAddImg,onDelImg}){
   const blankDraft={title:"",description:"",category:"General"};
   const[form,setForm]=useState(blankDraft);
   const[editing,setEditing]=useState({});// id -> draft object
@@ -1349,6 +1350,12 @@ function IdeasPanel({ideas,ready,categories,onAdd,onUpd,onDel,onToTask,onAddImg,
 );
 alter table public.ideas enable row level security;
 create policy "Allow all" on public.ideas for all using (true) with check (true);`}</pre>
+        </div>
+      )}
+      {ready&&imgColMissing&&(
+        <div style={{padding:"12px 16px",background:"#fffbf0",border:`1px solid ${C.orange}33`,borderLeft:`4px solid ${C.orange}`,fontSize:12,color:C.text,lineHeight:1.7,marginBottom:20}}>
+          <strong style={{color:C.orange}}>Migration needed: </strong>Your <code>ideas</code> table is missing the <code>images</code> column. Run this in <strong>Supabase → SQL Editor</strong>:
+          <pre style={{marginTop:8,background:"#1a1a2e",color:"#a8d8a8",padding:"10px 14px",fontSize:11,overflowX:"auto",fontFamily:"monospace",lineHeight:1.6}}>{`alter table public.ideas add column if not exists images jsonb default '[]'::jsonb;`}</pre>
         </div>
       )}
       {/* Add form */}

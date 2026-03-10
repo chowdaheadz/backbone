@@ -140,6 +140,7 @@ export default function App(){
   const[imgReady,setImgReady]=useState(false);
   const[loading,setLoading]=useState(true);
   const[dbError,setDbError]=useState(null);
+  const[orderCount,setOrderCount]=useState(null);
   const dbW=(op,res)=>{if(res.error){const m=`${op}: ${res.error.message}`;console.error('[backbone]',m,res.error);setDbError(m);}return res;};
 
   useEffect(()=>{
@@ -182,6 +183,12 @@ export default function App(){
       if(!catRes.error&&catRes.data?.length){setCategories(catRes.data.map(c=>c.name));setCatReady(true);}
       const imgCheck=await supabase.from('tasks').select('images').limit(1);
       if(!imgCheck.error)setImgReady(true);
+      try{
+        const odRes=await fetch('https://app.orderdesk.me/api/v2/orders?folder_id=85961&limit=1',{
+          headers:{'ORDERDESK-STORE-ID':'14736','ORDERDESK-API-KEY':'zdD7Mac5fnaKtsekLaSdm5XQaqos5rDZH7fenKuAeHTmKB56VW'},
+        });
+        if(odRes.ok){const odData=await odRes.json();setOrderCount(odData.total_count??null);}
+      }catch(e){console.error('[backbone] orderdesk fetch failed',e);}
       setLoading(false);
     }
     load();
@@ -417,7 +424,7 @@ export default function App(){
       {dbError&&<div style={{background:"#fff0f0",borderBottom:`2px solid ${C.red}`,padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:C.red,fontWeight:700}}>⚠ DATABASE ERROR: {dbError}<button onClick={()=>setDbError(null)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontWeight:700,marginLeft:16}}>✕</button></div>}
 
       <div style={{padding:28}}>
-        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg} categories={categories}/>}
+        {view==="dashboard" &&<Dash tasks={tasks} stats={stats} emps={emps} recurring={recurring} onOpen={setModal} dashMsg={dashMsg} categories={categories} orderCount={orderCount}/>}
         {view==="list"      &&<ListView tasks={filtered} emps={emps} fSt={fSt} setFSt={setFSt} fPr={fPr} setFPr={setFPr} fAs={fAs} setFAs={setFAs} fCa={fCa} setFCa={setFCa} onOpen={setModal} onUpdate={handleTaskSave} categories={categories}/>}
         {view==="calendar"  &&<CalView tasks={tasks} month={calMo} setMonth={setCalMo} onOpen={setModal} categories={categories}/>}
         {view==="recurring" &&canEdit&&<RecurringPanel recurring={recurring} tasks={tasks} emps={emps} canEdit={canEdit} onAdd={addRecurring} onUpd={updRecurring} onDel={delRecurring} onToggle={toggleRecurring} onRunNow={runNow} categories={categories}/>}
@@ -823,7 +830,7 @@ function MC({task,emps,onClick,highlight}){
   </div>;
 }
 
-function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories}){
+function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories,orderCount}){
   const od=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)<today);
   const up=tasks.filter(t=>t.status!=="Done"&&t.dueDate&&new Date(t.dueDate)>=today).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).slice(0,5);
   const activeRec=recurring.filter(r=>r.active).length;
@@ -844,6 +851,7 @@ function Dash({tasks,stats,emps,recurring,onOpen,dashMsg,categories}){
         <SC label="OVERDUE"      value={stats.overdue}  color={C.red}    sub={stats.overdue>0?"needs attention":"all clear"}/>
         <SC label="CRITICAL"     value={stats.critical} color={C.orange} sub="open critical tasks"/>
         <SC label="↻ RECURRING"  value={activeRec}      color={C.purple} sub="active templates"/>
+        <SC label="TO SHIP TODAY" value={orderCount===null?"…":orderCount} color={C.blue} sub="orders in queue"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:24}}>
         <div><SH label="OVERDUE" count={od.length} color={C.red}/>{od.length===0?<div style={{color:C.textMuted,fontSize:13}}>No overdue tasks 🎉</div>:od.map(t=><MC key={t.id} task={t} emps={emps} onClick={()=>onOpen(t)} highlight={C.red+"99"}/>)}</div>
